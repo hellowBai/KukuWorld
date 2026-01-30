@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace PetCollector.Data
+namespace KukuWorld.Data
 {
     /// <summary>
     /// 神话宠物数据结构 - 继承自PetData

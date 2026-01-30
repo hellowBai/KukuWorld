@@ -1,4 +1,4 @@
-# PetCollector - 宠物收集塔防游戏
+# KukuWorld - 宠物收集塔防游戏
 
 ## 项目概述
 
@@ -26,7 +26,7 @@
 ## 项目结构
 
 ```
-PetCollector/
+KukuWorld/
 ├── Assets/                 # Unity资源文件
 ├── Src/                   # 源代码
 │   ├── Core/              # 核心框架

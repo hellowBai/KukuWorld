@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using PetCollector.Data;
+using KukuWorld.Data;
 
-namespace PetCollector.Systems
+namespace KukuWorld.Systems
 {
     /// <summary>
     /// 宠物收集管理器 - 管理宠物图鉴数据库

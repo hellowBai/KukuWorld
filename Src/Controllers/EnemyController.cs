@@ -1,7 +1,7 @@
 using UnityEngine;
-using PetCollector.Data;
+using KukuWorld.Data;
 
-namespace PetCollector.Controllers
+namespace KukuWorld.Controllers
 {
     /// <summary>
     /// 敌人控制器 - 管理敌人行为和AI

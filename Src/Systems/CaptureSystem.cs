@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
-using PetCollector.Data;
+using KukuWorld.Data;
 
-namespace PetCollector.Systems
+namespace KukuWorld.Systems
 {
     /// <summary>
     /// 捕捉系统 - 管理捕捉逻辑

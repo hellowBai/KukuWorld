@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace PetCollector.Data
+namespace KukuWorld.Data
 {
     /// <summary>
     /// 英雄数据结构

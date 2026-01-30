@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
-using PetCollector.Data;
+using KukuWorld.Data;
 
-namespace PetCollector.Controllers
+namespace KukuWorld.Controllers
 {
     /// <summary>
     /// 宠物战斗控制器 - 管理宠物战斗AI

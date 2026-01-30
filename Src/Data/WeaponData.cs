@@ -1,4 +1,4 @@
-namespace PetCollector.Data
+namespace KukuWorld.Data
 {
     /// <summary>
     /// 武器数据结构

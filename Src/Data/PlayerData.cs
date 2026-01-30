@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace PetCollector.Data
+namespace KukuWorld.Data
 {
     /// <summary>
     /// 玩家数据结构

@@ -1,7 +1,7 @@
 using UnityEngine;
-using PetCollector.Data;
+using KukuWorld.Data;
 
-namespace PetCollector.Systems
+namespace KukuWorld.Systems
 {
     /// <summary>
     /// 游戏主管理器 - 管理全局游戏状态
