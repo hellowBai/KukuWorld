@@ -29,7 +29,7 @@ Tests 文件夹是项目的测试代码根目录，包含单元测试、集成�
 ### Fixtures/
 - **用途**: 存放测试固件
 - **内容**:
-  - TestPetData.cs: 测试用宠物数据
+  - TestKuKuData.cs: 测试用KuKu数据
   - TestScenarios.cs: 测试场景
 
 ## 设计方案

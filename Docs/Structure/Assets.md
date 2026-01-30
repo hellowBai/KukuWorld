@@ -20,7 +20,7 @@ Assets 文件夹是 Unity 项目的资源根目录，包含游戏中所有的资
 - **子目录**:
   - Characters/: 角色预制体
   - Enemies/: 敌人预制体
-  - Pets/: 宠物预制体
+  - Pets/: KuKu预制体
   - Buildings/: 建筑预制体
   - Items/: 道具预制体
   - Effects/: 特效预制体
@@ -32,7 +32,7 @@ Assets 文件夹是 Unity 项目的资源根目录，包含游戏中所有的资
   - UI/: UI 精灵
   - Environment/: 环境精灵
   - Icons/: 图标精灵
-  - Pets/: 宠物精灵
+  - Pets/: KuKu精灵
 
 ### Audio/
 - **用途**: 存放音频文件

@@ -8,8 +8,8 @@ Src 文件夹是项目的源代码根目录，包含所有 C# 脚本文件，按
 ### Data/
 - **用途**: 存放数据结构类
 - **内容**:
-  - PetData.cs: 基础宠物数据结构
-  - MythicalPetData.cs: 神话宠物数据结构
+  - KuKuData.cs: 基础KuKu数据结构
+  - MythicalKuKuData.cs: 神话KuKu数据结构
   - UnitData.cs: 单位数据结构
   - WeaponData.cs: 武器数据结构
   - BuildingData.cs: 建筑数据结构
@@ -23,7 +23,7 @@ Src 文件夹是项目的源代码根目录，包含所有 C# 脚本文件，按
   - BattleSystem.cs: 战斗系统
   - CaptureSystem.cs: 捕捉系统
   - NuwaDefenseSystem.cs: 女娲守护系统
-  - PetCollectionManager.cs: 宠物收集管理器
+  - PetCollectionManager.cs: KuKu收集管理器
   - EvolutionSystem.cs: 进化系统
   - FusionSystem.cs: 融合系统
   - EquipmentSystem.cs: 装备系统
@@ -33,7 +33,7 @@ Src 文件夹是项目的源代码根目录，包含所有 C# 脚本文件，按
 - **用途**: 存放游戏对象控制器
 - **内容**:
   - EnemyController.cs: 敌人控制器
-  - PetCombatController.cs: 宠物战斗控制器
+  - PetCombatController.cs: KuKu战斗控制器
   - BuildingController.cs: 建筑控制器
   - UnitController.cs: 单位控制器
   - WeaponController.cs: 武器控制器
@@ -45,7 +45,7 @@ Src 文件夹是项目的源代码根目录，包含所有 C# 脚本文件，按
   - CaptureUI.cs: 捕捉界面
   - DefenseUI.cs: 防守界面
   - ShopUI.cs: 商店界面
-  - PetCollectionUI.cs: 宠物收集界面
+  - PetCollectionUI.cs: KuKu收集界面
 
 ### Managers/
 - **用途**: 存放各类管理器
