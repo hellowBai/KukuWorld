@@ -1,421 +1,139 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
-using KukuWorld.Data;
+using KukuWorld.Systems;
 
 namespace KukuWorld.Systems
 {
     /// <summary>
-    /// 敌人控制器 - 管理敌人行为和AI
+    /// 敌人控制器 - 控制敌人的行为和AI
     /// </summary>
     public class EnemyController : MonoBehaviour
     {
-        [Header("敌人属性")]
-        public float health = 100f;
-        public float maxHealth = 100f;
-        public float speed = 2f;
-        public float damage = 10f;
-        public float attackRange = 1f;
-        public float attackCooldown = 1f;
-        
-        [Header("目标设置")]
-        public Transform[] targetPoints;  // 目标点数组（如守护点）
-        public Transform currentTarget;   // 当前目标
-        
-        [Header("敌人类型")]
-        public CaptureSystem.ItemDrop.ItemType enemyType = CaptureSystem.ItemDrop.ItemType.Coin;
-        
-        // 私有变量
-        private float attackTimer = 0f;
-        private bool isAlive = true;
-        private BattleSystem battleSystem;
-        private NuwaDefenseSystem defenseSystem;
-        private List<Transform> pathToTarget;
-        
-        // 事件
-        public event Action<GameObject> OnEnemyDestroyed;
-        public event Action<float> OnTakeDamage;
-        public event Action OnReachTarget;
-        
-        // Start is called before the first frame update
-        void Start()
-        {
-            InitializeEnemy();
-        }
-        
-        // Update is called once per frame
-        void Update()
-        {
-            if (!isAlive) return;
-            
-            UpdateEnemyBehavior();
-        }
-        
+        // 敌人属性
+        private float health;                              // 生命值
+        private float speed;                               // 移动速度
+        private float damage;                              // 造成的伤害
+        private BattleSystem.EnemyType enemyType;          // 敌人类型
+
+        // 目标信息
+        private Transform target;                          // 目标（守护点）
+
         /// <summary>
         /// 初始化敌人
         /// </summary>
-        public void Initialize(float h, float s, float d, Transform[] targets, CaptureSystem.ItemDrop.ItemType type)
+        public void Initialize(float h, float s, float d, BattleSystem.EnemyType type)
         {
             health = h;
-            maxHealth = h;
             speed = s;
             damage = d;
-            targetPoints = targets;
             enemyType = type;
             
-            // 设置初始目标
-            SetInitialTarget();
+            // 在实际游戏中，这里会设置目标点（守护点位置）
+            // target = GameObject.FindGameObjectWithTag("GuardianPoint").transform;
+            // 为了演示，我们创建一个临时目标点
+            GameObject tempTarget = new GameObject("GuardianPoint");
+            tempTarget.transform.position = new Vector3(-10, 0, 0); // 守护点在左侧
+            target = tempTarget.transform;
             
-            // 获取系统引用
-            battleSystem = FindObjectOfType<BattleSystem>();
-            defenseSystem = FindObjectOfType<NuwaDefenseSystem>();
-            
-            Debug.Log($"敌人初始化: HP={health}, Speed={speed}, Damage={damage}, Type={type}");
+            Debug.Log($"敌人生成，目标是守护点位置: {target.position}");
         }
-        
+
         /// <summary>
-        /// 设置初始目标
+        /// Unity Update方法
         /// </summary>
-        private void SetInitialTarget()
+        void Update()
         {
-            if (targetPoints != null && targetPoints.Length > 0)
+            if (health > 0)
             {
-                // 选择最近的目标点
-                Transform closestTarget = targetPoints[0];
-                float closestDistance = Vector3.Distance(transform.position, targetPoints[0].position);
-                
-                for (int i = 1; i < targetPoints.Length; i++)
-                {
-                    float distance = Vector3.Distance(transform.position, targetPoints[i].position);
-                    if (distance < closestDistance)
-                    {
-                        closestDistance = distance;
-                        closestTarget = targetPoints[i];
-                    }
-                }
-                
-                currentTarget = closestTarget;
+                MoveTowardsGuardianPoint();
             }
         }
-        
+
         /// <summary>
-        /// 初始化敌人（从预制体实例化时调用）
+        /// 移向守护点/建筑目标
         /// </summary>
-        private void InitializeEnemy()
+        private void MoveTowardsGuardianPoint()
         {
-            isAlive = true;
-            health = maxHealth;
-            attackTimer = 0f;
+            if (target == null) return;
             
-            Debug.Log($"敌人 {gameObject.name} 已初始化");
-        }
-        
-        /// <summary>
-        /// 更新敌人行为
-        /// </summary>
-        private void UpdateEnemyBehavior()
-        {
-            if (currentTarget == null)
+            // 向目标点移动
+            transform.position = Vector3.MoveTowards(transform.position, target.position, speed * Time.deltaTime);
+            
+            // 检查是否到达目标点
+            if (Vector3.Distance(transform.position, target.position) < 0.5f)
             {
-                Debug.LogWarning("敌人没有目标，寻找新目标...");
-                SetInitialTarget();
-                if (currentTarget == null) return; // 仍然没有目标，跳过更新
-            }
-            
-            // 移动到目标
-            MoveTowardsTarget();
-            
-            // 检查是否到达目标
-            CheckTargetReached();
-            
-            // 更新攻击计时器
-            attackTimer += Time.deltaTime;
-        }
-        
-        /// <summary>
-        /// 移动到目标点
-        /// </summary>
-        private void MoveTowardsTarget()
-        {
-            if (currentTarget == null) return;
-            
-            // 计算到目标的方向
-            Vector3 direction = (currentTarget.position - transform.position).normalized;
-            
-            // 移动
-            transform.position += direction * speed * Time.deltaTime;
-            
-            // 朝向目标
-            if (direction != Vector3.zero)
-            {
-                transform.forward = direction;
+                // 到达守护点，开始破坏
+                AttackGuardianPoint();
             }
         }
-        
+
         /// <summary>
-        /// 检查是否到达目标
+        /// 攻击守护点/建筑
         /// </summary>
-        private void CheckTargetReached()
+        private void AttackGuardianPoint()
         {
-            if (currentTarget == null) return;
+            Debug.Log($"敌人到达守护点位置，造成 {damage} 点破坏！");
             
-            float distanceToTarget = Vector3.Distance(transform.position, currentTarget.position);
+            // 通知战斗系统敌人到达目标
+            BattleSystem battleSystem = FindObjectOfType<BattleSystem>();
+            if (battleSystem != null)
+            {
+                battleSystem.EnemyReachedEnd(gameObject);
+            }
             
-            if (distanceToTarget <= attackRange)
-            {
-                // 到达目标，攻击
-                AttackTarget();
-            }
+            // 销毁敌人对象
+            Destroy(gameObject);
         }
-        
-        /// <summary>
-        /// 攻击目标
-        /// </summary>
-        private void AttackTarget()
-        {
-            if (attackTimer >= attackCooldown)
-            {
-                // 通知防御系统敌人到达目标
-                if (defenseSystem != null)
-                {
-                    defenseSystem.EnemyAttackedTemple(damage);
-                }
-                else if (battleSystem != null)
-                {
-                    battleSystem.EnemyReachedEnd(gameObject);
-                }
-                
-                // 触发到达目标事件
-                OnReachTarget?.Invoke();
-                
-                Debug.Log($"敌人攻击目标，造成 {damage} 点伤害");
-                
-                // 重置攻击计时器
-                attackTimer = 0f;
-                
-                // 如果是立即杀死敌人（因为已经到达目标）
-                Die();
-            }
-        }
-        
+
         /// <summary>
         /// 受到伤害
         /// </summary>
         public void TakeDamage(float damageAmount)
         {
-            if (!isAlive) return;
-            
             health -= damageAmount;
-            
-            // 触发受伤事件
-            OnTakeDamage?.Invoke(damageAmount);
-            
-            Debug.Log($"敌人受到 {damageAmount} 点伤害，剩余生命值: {health}");
             
             if (health <= 0)
             {
                 Die();
             }
         }
-        
+
         /// <summary>
         /// 死亡
         /// </summary>
         private void Die()
         {
-            if (!isAlive) return;
-            
-            isAlive = false;
-            
-            Debug.Log($"敌人死亡");
-            
-            // 通知战斗系统敌人被击败
-            if (defenseSystem != null)
-            {
-                defenseSystem.EnemyDefeated();
-            }
-            else if (battleSystem != null)
+            BattleSystem battleSystem = FindObjectOfType<BattleSystem>();
+            if (battleSystem != null)
             {
                 battleSystem.EnemyDefeated(gameObject);
             }
             
             // 掉落物品
-            DropLoot();
+            DropItems();
             
-            // 触发死亡事件
-            OnEnemyDestroyed?.Invoke(gameObject);
-            
-            // 销毁游戏对象
             Destroy(gameObject);
         }
-        
+
         /// <summary>
         /// 掉落物品
         /// </summary>
-        private void DropLoot()
+        private void DropItems()
         {
-            // 根据敌人类型和等级掉落不同的物品
+            // 随机掉落金币、神石、灵魂等
             int coinDrop = UnityEngine.Random.Range(5, 15);
             int gemDrop = UnityEngine.Random.Range(0, 2);
             float soulDrop = UnityEngine.Random.Range(0.5f, 1.5f);
             
             // 通知玩家获得资源
-            var gameManager = FindObjectOfType<GameManager>();
-            if (gameManager != null)
+            if (GameManager.Instance != null)
             {
-                gameManager.PlayerData.AddCoins(coinDrop);
-                gameManager.PlayerData.AddGems(gemDrop);
-                gameManager.PlayerData.AddSouls(soulDrop);
-                
-                Debug.Log($"敌人掉落: {coinDrop}金币, {gemDrop}神石, {soulDrop:F1}灵魂");
+                GameManager.Instance.PlayerData.AddCoins(coinDrop);
+                GameManager.Instance.PlayerData.AddGems(gemDrop);
+                GameManager.Instance.PlayerData.AddSouls(soulDrop);
             }
-        }
-        
-        /// <summary>
-        /// 设置新目标
-        /// </summary>
-        public void SetNewTarget(Transform newTarget)
-        {
-            currentTarget = newTarget;
-        }
-        
-        /// <summary>
-        /// 设置多个目标点
-        /// </summary>
-        public void SetTargetPoints(Transform[] targets)
-        {
-            targetPoints = targets;
-            SetInitialTarget();
-        }
-        
-        /// <summary>
-        /// 获取敌人状态
-        /// </summary>
-        public (bool alive, float currentHealth, float maxHealth, float healthPercentage) GetStatus()
-        {
-            float healthPercentage = maxHealth > 0 ? (health / maxHealth) * 100f : 0f;
-            return (isAlive, health, maxHealth, healthPercentage);
-        }
-        
-        /// <summary>
-        /// 获取敌人类型
-        /// </summary>
-        public CaptureSystem.ItemDrop.ItemType GetEnemyType()
-        {
-            return enemyType;
-        }
-        
-        /// <summary>
-        /// 设置敌人速度
-        /// </summary>
-        public void SetSpeed(float newSpeed)
-        {
-            speed = newSpeed;
-        }
-        
-        /// <summary>
-        /// 设置敌人伤害
-        /// </summary>
-        public void SetDamage(float newDamage)
-        {
-            damage = newDamage;
-        }
-        
-        /// <summary>
-        /// 设置攻击范围
-        /// </summary>
-        public void SetAttackRange(float newRange)
-        {
-            attackRange = newRange;
-        }
-        
-        /// <summary>
-        /// 设置攻击冷却时间
-        /// </summary>
-        public void SetAttackCooldown(float newCooldown)
-        {
-            attackCooldown = newCooldown;
-        }
-        
-        /// <summary>
-        /// 检查敌人是否存活
-        /// </summary>
-        public bool IsAlive()
-        {
-            return isAlive;
-        }
-        
-        /// <summary>
-        /// 恢复健康状态
-        /// </summary>
-        public void Heal(float healAmount)
-        {
-            if (!isAlive) return;
             
-            health = Mathf.Min(maxHealth, health + healAmount);
-            
-            Debug.Log($"敌人被治疗 {healAmount} 点，当前生命值: {health}");
-        }
-        
-        /// <summary>
-        /// 检查敌人是否在攻击范围内
-        /// </summary>
-        public bool IsInAttackRange(Transform target)
-        {
-            if (target == null) return false;
-            
-            float distance = Vector3.Distance(transform.position, target.position);
-            return distance <= attackRange;
-        }
-        
-        /// <summary>
-        /// 获取到目标的距离
-        /// </summary>
-        public float GetDistanceToTarget()
-        {
-            if (currentTarget == null) return float.MaxValue;
-            
-            return Vector3.Distance(transform.position, currentTarget.position);
-        }
-        
-        /// <summary>
-        /// 获取当前生命值百分比
-        /// </summary>
-        public float GetHealthPercentage()
-        {
-            return maxHealth > 0 ? (health / maxHealth) * 100f : 0f;
-        }
-        
-        /// <summary>
-        /// 设置最大生命值
-        /// </summary>
-        public void SetMaxHealth(float newMaxHealth)
-        {
-            maxHealth = newMaxHealth;
-            health = Mathf.Min(health, maxHealth); // 确保当前生命值不超过最大值
-        }
-        
-        /// <summary>
-        /// 重置敌人状态
-        /// </summary>
-        public void ResetEnemy()
-        {
-            health = maxHealth;
-            isAlive = true;
-            attackTimer = 0f;
-            
-            Debug.Log("敌人状态已重置");
-        }
-        
-        /// <summary>
-        /// 在 OnDestroy 中清理事件订阅
-        /// </summary>
-        void OnDestroy()
-        {
-            // 清理事件订阅，防止内存泄漏
-            OnEnemyDestroyed = null;
-            OnTakeDamage = null;
-            OnReachTarget = null;
+            Debug.Log($"敌人死亡，掉落：{coinDrop}金币，{gemDrop}神石，{soulDrop}灵魂");
         }
     }
 }

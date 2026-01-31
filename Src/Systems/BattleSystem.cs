@@ -6,11 +6,34 @@ using KukuWorld.Data;
 namespace KukuWorld.Systems
 {
     /// <summary>
-    /// 战斗系统 - 管理塔防战斗逻辑、敌人生成、战斗状态等
+    /// 战斗系统
     /// </summary>
     public class BattleSystem
     {
-        // 战斗状态
+        // 配置参数
+        public float BaseEnemySpawnInterval = 2.0f;  // 基础敌人生成间隔
+        public int MaxEnemiesOnField = 10;           // 最大同时在场敌人数量
+
+        // 战斗数据
+        private BattleState currentState = BattleState.Setup; // 当前状态
+        private int currentWave = 0;                 // 当前波次
+        private int enemiesRemaining = 0;            // 剩余敌人数量
+        private int playerLives = 10;                // 玩家生命值（守护点血量）
+        private float timeUntilNextWave = 0;         // 下一波倒计时
+        private List<GameObject> activeEnemies = new List<GameObject>(); // 活跃敌人列表
+        private List<GameObject> activeKukus = new List<GameObject>();    // 活跃KuKu列表
+        private List<GameObject> activeUnits = new List<GameObject>();   // 活跃单位列表（机器人/坦克）
+
+        // 事件系统
+        public event Action<int, int> OnWaveChanged;      // 波次变化事件 (当前波次, 剩余敌人)
+        public event Action<int> OnPlayerLifeChanged;     // 玩家生命值变化事件 (剩余生命)
+        public event Action OnBattleVictory;              // 战斗胜利事件
+        public event Action OnBattleDefeat;               // 战斗失败事件
+        public event Action<float> OnBattleUpdate;        // 战斗更新事件 (游戏时间)
+
+        /// <summary>
+        /// 战斗状态
+        /// </summary>
         public enum BattleState 
         { 
             Setup,                    // 设置阶段
@@ -22,7 +45,9 @@ namespace KukuWorld.Systems
             Defeat                    // 失败
         }
 
-        // 敌人类型
+        /// <summary>
+        /// 敌人类型
+        /// </summary>
         public enum EnemyType 
         { 
             WildPet,                  // 野生KuKu转化的敌人
@@ -31,81 +56,22 @@ namespace KukuWorld.Systems
             Boss                      // BOSS
         }
 
-        // 配置参数
-        public float BaseEnemySpawnInterval = 2.0f;              // 基础生成间隔
-        public int MaxEnemiesOnField = 10;                       // 最大敌人数量
-        public Transform[] SpawnPoints;                          // 生成点
-        public Transform[] TemplePoints;                         // 目标点
-
-        // 战斗数据
-        private BattleState currentState = BattleState.Setup;     // 当前状态
-        private int currentWave = 1;                             // 当前波次
-        private int enemiesRemaining = 0;                        // 剩余敌人
-        private int playerLives = 10;                            // 玩家生命（守护点血量）
-        private float timeUntilNextWave = 5.0f;                  // 下一波倒计时
-        private List<GameObject> activeEnemies = new List<GameObject>(); // 活跃敌人
-        private List<UnitData> activePets = new List<UnitData>();        // 活跃KuKu（玩家防守单位）
-        private List<UnitData> activeUnits = new List<UnitData>();       // 活跃单位（建筑生产的机器人/坦克）
-        private List<BuildingData> activeTowers = new List<BuildingData>(); // 活跃防御塔
-
-        // 神殿相关
-        public GameObject nuwaTemple;                            // 女娲神殿
-        public int nuwaTempleHealth = 1000;                      // 神殿生命值
-        public int maxTempleHealth = 1000;                       // 神殿最大生命值
-
-        // 配置参数
-        public Transform[] evilSpawnPoints;                      // 邪魔出生点
-        public Transform[] nuwaTemplePoints;                     // 神殿目标点
-        public float difficultyIncreaseRate = 0.1f;              // 难度递增率
-
-        // 战斗数据（续）
-        private int waveNumber = 1;                              // 波次数
-        private int evilCount = 0;                               // 邪魂数量
-        private bool isDefending = false;                        // 是否在防守
-        private float cumulativeDifficulty = 1.0f;               // 累积难度
-
-        // 事件
-        public event Action<int, int> OnWaveChanged;             // 波次变化
-        public event Action<int> OnPlayerLifeChanged;            // 生命变化
-        public event Action OnBattleVictory;                     // 战斗胜利
-        public event Action OnBattleDefeat;                      // 战斗失败
-        public event Action OnCapturePhaseEnded;                 // 捕捉阶段结束
-        public event Action OnDefensePhaseStarted;               // 防守阶段开始
-        public event Action<int> OnWaveStarted;                  // 波次开始
-        public event Action<int, int> OnEvilSpawned;             // 邪魔生成
-        public event Action<int> OnTempleHealthChanged;          // 神殿生命变化
-        public event Action OnDefenseSuccess;                    // 防守成功
-        public event Action OnDefenseFailed;                     // 防守失败
-
-        // 构造函数
-        public BattleSystem()
-        {
-            InitializeBattle();
-        }
-
         /// <summary>
-        /// 初始化战斗
+        /// 初始化战斗系统
         /// </summary>
-        private void InitializeBattle()
+        public void Initialize()
         {
+            // 重置战斗数据
             currentState = BattleState.Setup;
-            currentWave = 1;
+            currentWave = 0;
             playerLives = 10;
-            nuwaTempleHealth = maxTempleHealth;
+            enemiesRemaining = 0;
+            timeUntilNextWave = 0;
+            
+            // 清理之前的对象
+            ClearAllObjects();
             
             Debug.Log("战斗系统初始化完成");
-        }
-
-        /// <summary>
-        /// 开始战斗
-        /// </summary>
-        public void StartBattle()
-        {
-            if (currentState == BattleState.Setup)
-            {
-                currentState = BattleState.CapturePhase;
-                Debug.Log("战斗开始 - 捕捉阶段");
-            }
         }
 
         /// <summary>
@@ -113,57 +79,140 @@ namespace KukuWorld.Systems
         /// </summary>
         public void InitializeDefensePhase(PlayerData playerData)
         {
-            if (playerData == null)
-            {
-                Debug.LogError("玩家数据为空，无法初始化防守阶段");
-                return;
-            }
-
-            // 将玩家的KuKu添加到活跃单位列表
-            foreach (var kvp in playerData.CollectedKukus)
-            {
-                // 将神话KuKu转换为可部署单位
-                UnitData petUnit = ConvertMythicalKukuToUnit(kvp.Value);
-                if (petUnit != null)
-                {
-                    activePets.Add(petUnit);
-                }
-            }
-
-            // 添加玩家部署的单位
-            activeUnits.AddRange(playerData.DeployedUnits);
-
-            // 获取玩家建造的防御塔
-            // 这里需要连接到BuildingManager来获取塔类建筑
             currentState = BattleState.DefensePhaseSetup;
-            isDefending = true;
-
-            Debug.Log($"防守阶段初始化完成，玩家单位数量: {activePets.Count + activeUnits.Count}");
+            
+            Debug.Log("防守阶段初始化，部署玩家单位！");
+            
+            // 部署玩家的KuKu
+            DeployPlayerKukus(playerData);
+            
+            // 部署玩家的单位
+            DeployPlayerUnits(playerData);
+            
+            // 开始第一波敌人
+            StartNextWave();
+            
+            currentState = BattleState.WaveStart;
         }
 
         /// <summary>
-        /// 将神话KuKu转换为单位
+        /// 部署玩家KuKu（防守阶段）
         /// </summary>
-        private UnitData ConvertMythicalKukuToUnit(MythicalKukuData kuku)
+        private void DeployPlayerKukus(PlayerData playerData)
         {
-            if (kuku == null) return null;
-
-            UnitData unit = new UnitData
+            try
             {
-                Name = kuku.Name,
-                Description = kuku.Description,
-                Type = UnitData.UnitType.Hybrid, // KuKu单位类型
-                AttackPower = kuku.AttackPower,
-                DefensePower = kuku.DefensePower,
-                Speed = kuku.Speed,
-                Health = kuku.Health,
-                Range = kuku.SkillRange,
-                Level = kuku.Level,
-                MaxEquipmentSlots = kuku.MaxEquipmentSlots,
-                IsDeployed = true
-            };
+                var activeKukuIds = playerData.ActiveKukuTeam;
+                
+                for (int i = 0; i < activeKukuIds.Count && i < 5; i++) // 最多5只KuKu
+                {
+                    int kukuId = activeKukuIds[i];
+                    
+                    if (playerData.CollectedKukus.ContainsKey(kukuId))
+                    {
+                        var kukuData = playerData.CollectedKukus[kukuId];
+                        
+                        // 在实际游戏中，这里会实例化KuKu预制体
+                        // GameObject kukuObject = Instantiate(kukuPrefab, deployPosition, Quaternion.identity);
+                        // 为了演示，我们创建一个虚拟对象
+                        
+                        GameObject kukuObject = new GameObject($"PlayerKuku_{kukuData.Name}_{kukuId}");
+                        kukuObject.transform.position = new Vector3(-5 + i * 2, 0, 0); // 在守护点前方布阵
+                        
+                        // 添加KuKu战斗组件
+                        var kukuComponent = kukuObject.AddComponent<KukuCombatController>();
+                        kukuComponent.Initialize(kukuData);
+                        
+                        activeKukus.Add(kukuObject);
+                    }
+                }
+                
+                Debug.Log($"部署了 {activeKukus.Count} 只玩家KuKu来保卫守护点");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"部署玩家KuKu时发生错误: {e.Message}");
+            }
+        }
 
-            return unit;
+        /// <summary>
+        /// 部署玩家单位（防守阶段）
+        /// </summary>
+        private void DeployPlayerUnits(PlayerData playerData)
+        {
+            try
+            {
+                // 部署玩家的已部署单位
+                foreach (var unit in playerData.DeployedUnits)
+                {
+                    GameObject unitObject = new GameObject($"PlayerUnit_{unit.Name}_{unit.Id}");
+                    unitObject.transform.position = new Vector3(-4 + UnityEngine.Random.Range(-1f, 1f), 0, UnityEngine.Random.Range(-2f, 2f));
+                    
+                    var unitComponent = unitObject.AddComponent<UnitCombatController>();
+                    unitComponent.Initialize(unit);
+                    
+                    activeUnits.Add(unitObject);
+                }
+                
+                Debug.Log($"部署了 {activeUnits.Count} 个玩家单位");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"部署玩家单位时发生错误: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 生成敌人
+        /// </summary>
+        private void SpawnEnemy(EnemyType type = EnemyType.WildPet)
+        {
+            try
+            {
+                // 在实际游戏中，这里会从预设的出生点生成敌人
+                Vector3 spawnPosition = new Vector3(10, 0, UnityEngine.Random.Range(-5f, 5f)); // 从右侧生成
+                
+                // 创建敌人对象
+                GameObject enemyObject = new GameObject($"Enemy_Type{type}_Wave{currentWave}");
+                enemyObject.transform.position = spawnPosition;
+                
+                // 添加敌人组件
+                var enemyComponent = enemyObject.AddComponent<EnemyController>();
+                
+                // 根据波次和类型设置敌人属性
+                float health = 50f + currentWave * 10f;
+                float speed = 1f + currentWave * 0.1f;
+                float damage = 5f + currentWave * 0.5f;
+                
+                // 根据敌人类型调整属性
+                switch (type)
+                {
+                    case EnemyType.Demon:
+                        health *= 1.5f;
+                        damage *= 1.3f;
+                        break;
+                    case EnemyType.EliteDemon:
+                        health *= 2.5f;
+                        damage *= 2.0f;
+                        speed *= 1.2f;
+                        break;
+                    case EnemyType.Boss:
+                        health *= 5.0f;
+                        damage *= 3.0f;
+                        break;
+                }
+                
+                enemyComponent.Initialize(health, speed, damage, type);
+                
+                activeEnemies.Add(enemyObject);
+                enemiesRemaining--;
+                
+                Debug.Log($"生成敌人，类型: {type}，剩余 {enemiesRemaining} 只");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"生成敌人时发生错误: {e.Message}");
+            }
         }
 
         /// <summary>
@@ -171,197 +220,56 @@ namespace KukuWorld.Systems
         /// </summary>
         public void StartNextWave()
         {
-            currentWave++;
-            waveNumber = currentWave;
-
-            // 计算当前波次的敌人数量和强度
-            enemiesRemaining = CalculateEnemiesForWave(currentWave);
-            evilCount = enemiesRemaining;
-
-            // 更新难度
-            cumulativeDifficulty = 1.0f + (currentWave - 1) * difficultyIncreaseRate;
-
-            currentState = BattleState.WaveStart;
-            
-            // 生成敌人
-            SpawnWaveEnemies();
-
-            OnWaveStarted?.Invoke(currentWave);
-            OnWaveChanged?.Invoke(currentWave, enemiesRemaining);
-
-            Debug.Log($"第 {currentWave} 波开始，敌人数量: {enemiesRemaining}");
-        }
-
-        /// <summary>
-        /// 计算波次敌人数量
-        /// </summary>
-        private int CalculateEnemiesForWave(int wave)
-        {
-            // 随着波次增加，敌人数量线性增长
-            return 5 + (wave - 1) * 2;
-        }
-
-        /// <summary>
-        /// 生成波次敌人
-        /// </summary>
-        private void SpawnWaveEnemies()
-        {
-            for (int i = 0; i < enemiesRemaining; i++)
+            try
             {
-                // 根据波次和难度生成敌人
-                EnemyType enemyType = DetermineEnemyTypeForWave(currentWave);
-                SpawnEnemy(enemyType);
+                currentWave++;
                 
-                // 为了避免同时生成过多敌人，稍微延迟
-                System.Threading.Thread.Sleep(100);
+                // 计算当前波次的敌人数量和类型
+                int enemyCount = Mathf.Min(currentWave * 3, 30); // 每波最多30只敌人
+                enemiesRemaining = enemyCount;
+                
+                // 通知UI更新
+                OnWaveChanged?.Invoke(currentWave, enemiesRemaining);
+                
+                Debug.Log($"第 {currentWave} 波敌人来袭，共 {enemyCount} 只敌人，守护守护点！");
+                
+                // 生成不同类型的敌人
+                for (int i = 0; i < enemyCount; i++)
+                {
+                    EnemyType type = GetEnemyTypeForWave(currentWave);
+                    SpawnEnemy(type);
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"开始新波次时发生错误: {e.Message}");
             }
         }
 
         /// <summary>
-        /// 确定波次敌人类型
+        /// 获取当前波次的敌人类型
         /// </summary>
-        private EnemyType DetermineEnemyTypeForWave(int wave)
+        private EnemyType GetEnemyTypeForWave(int waveNum)
         {
-            if (wave <= 5)
+            // 随着波次增加，出现更高级的敌人
+            float rand = UnityEngine.Random.value;
+            
+            if (waveNum >= 10 && rand < 0.1f)
             {
-                return EnemyType.WildPet;
+                return EnemyType.Boss; // 第10波后有10%概率出现BOSS
             }
-            else if (wave <= 10)
+            else if (waveNum >= 5 && rand < 0.3f)
             {
-                return UnityEngine.Random.value < 0.7f ? EnemyType.WildPet : EnemyType.Demon;
+                return EnemyType.EliteDemon; // 第5波后有30%概率出现精英
             }
-            else if (wave <= 15)
+            else if (waveNum >= 2 && rand < 0.6f)
             {
-                float rand = UnityEngine.Random.value;
-                if (rand < 0.5f) return EnemyType.WildPet;
-                else if (rand < 0.85f) return EnemyType.Demon;
-                else return EnemyType.EliteDemon;
+                return EnemyType.Demon; // 第2波后有60%概率出现邪魔
             }
             else
             {
-                float rand = UnityEngine.Random.value;
-                if (rand < 0.3f) return EnemyType.Demon;
-                else if (rand < 0.6f) return EnemyType.EliteDemon;
-                else return EnemyType.Boss;
+                return EnemyType.WildPet; // 其他是野生KuKu
             }
-        }
-
-        /// <summary>
-        /// 生成敌人
-        /// </summary>
-        public void SpawnEnemy(EnemyType type = EnemyType.WildPet)
-        {
-            // 在实际游戏中，这里会实例化敌人的GameObject
-            // 暂时用日志代替
-            Debug.Log($"生成敌人: {type}");
-
-            // 更新活跃敌人列表（虚拟）
-            // 在实际实现中，这里会创建真正的敌人对象
-
-            OnEvilSpawned?.Invoke(waveNumber, activeEnemies.Count + 1);
-        }
-
-        /// <summary>
-        /// 敌人被击败
-        /// </summary>
-        public void EnemyDefeated(GameObject enemy)
-        {
-            enemiesRemaining--;
-            evilCount--;
-
-            // 给玩家奖励
-            RewardPlayerForDefeat();
-
-            if (enemiesRemaining <= 0)
-            {
-                // 当前波次完成
-                WaveCompleted();
-            }
-
-            Debug.Log($"敌人被击败，剩余: {enemiesRemaining}");
-        }
-
-        /// <summary>
-        /// 给玩家击败敌人的奖励
-        /// </summary>
-        private void RewardPlayerForDefeat()
-        {
-            // 给玩家金币、灵魂等奖励
-            // 在实际游戏中，这里会连接到玩家数据
-        }
-
-        /// <summary>
-        /// 敌人到达终点
-        /// </summary>
-        public void EnemyReachedEnd(GameObject enemy)
-        {
-            // 损失神殿生命值
-            nuwaTempleHealth -= 100; // 每个敌人造成100点伤害
-
-            if (nuwaTempleHealth <= 0)
-            {
-                // 神殿被摧毁，防守失败
-                Defeat();
-            }
-            else
-            {
-                // 更新神殿生命值
-                OnTempleHealthChanged?.Invoke(nuwaTempleHealth);
-            }
-
-            // 从活跃敌人列表中移除
-            activeEnemies.Remove(enemy);
-
-            Debug.Log($"敌人到达终点，神殿生命值: {nuwaTempleHealth}");
-        }
-
-        /// <summary>
-        /// 波次完成
-        /// </summary>
-        private void WaveCompleted()
-        {
-            currentState = BattleState.Fighting;
-
-            Debug.Log($"第 {currentWave} 波完成！");
-
-            // 检查是否完成所有波次
-            if (currentWave >= 20) // 假设有20波
-            {
-                Victory();
-            }
-            else
-            {
-                // 准备下一波
-                timeUntilNextWave = 5.0f; // 5秒后开始下一波
-            }
-        }
-
-        /// <summary>
-        /// 胜利
-        /// </summary>
-        private void Victory()
-        {
-            currentState = BattleState.Victory;
-            isDefending = false;
-
-            OnBattleVictory?.Invoke();
-            OnDefenseSuccess?.Invoke();
-
-            Debug.Log("防守成功！胜利！");
-        }
-
-        /// <summary>
-        /// 失败
-        /// </summary>
-        private void Defeat()
-        {
-            currentState = BattleState.Defeat;
-            isDefending = false;
-
-            OnBattleDefeat?.Invoke();
-            OnDefenseFailed?.Invoke();
-
-            Debug.Log("防守失败！神殿被摧毁！");
         }
 
         /// <summary>
@@ -371,157 +279,141 @@ namespace KukuWorld.Systems
         {
             switch (currentState)
             {
-                case BattleState.WaveStart:
-                    currentState = BattleState.Fighting;
-                    break;
-
                 case BattleState.Fighting:
-                    // 更新敌人和塔的互动
-                    UpdateTowerEnemyInteractions(deltaTime);
-                    
-                    // 检查是否需要开始下一波
-                    if (enemiesRemaining <= 0 && timeUntilNextWave > 0)
-                    {
-                        timeUntilNextWave -= deltaTime;
-                        if (timeUntilNextWave <= 0)
-                        {
-                            StartNextWave();
-                        }
-                    }
-                    break;
-
-                case BattleState.CapturePhase:
-                    // 捕捉阶段结束检查
-                    // 这里需要外部信号来切换到防守阶段
-                    break;
-
-                case BattleState.DefensePhaseSetup:
-                    // 设置完成后开始第一波
-                    StartNextWave();
-                    currentState = BattleState.Fighting;
+                    UpdateDefensePhase(deltaTime);
                     break;
             }
-        }
-
-        /// <summary>
-        /// 更新塔与敌人的互动
-        /// </summary>
-        private void UpdateTowerEnemyInteractions(float deltaTime)
-        {
-            // 在实际游戏中，这里会处理塔对敌人的攻击逻辑
-            // 检测敌人是否在塔的射程内并进行攻击
-        }
-
-        /// <summary>
-        /// 切换到防守阶段
-        /// </summary>
-        public void TransitionToDefensePhase()
-        {
-            if (currentState == BattleState.CapturePhase)
-            {
-                currentState = BattleState.DefensePhaseSetup;
-                OnCapturePhaseEnded?.Invoke();
-                OnDefensePhaseStarted?.Invoke();
-                
-                Debug.Log("切换到防守阶段");
-            }
-        }
-
-        /// <summary>
-        /// 检查是否在捕捉阶段
-        /// </summary>
-        public bool IsInCapturePhase()
-        {
-            return currentState == BattleState.CapturePhase;
-        }
-
-        /// <summary>
-        /// 检查是否在防守阶段
-        /// </summary>
-        public bool IsInDefensePhase()
-        {
-            return currentState == BattleState.DefensePhaseSetup || 
-                   currentState == BattleState.WaveStart || 
-                   currentState == BattleState.Fighting;
-        }
-
-        /// <summary>
-        /// 获取战斗状态信息
-        /// </summary>
-        public (BattleState state, int wave, int lives, int enemies) GetBattleStatus()
-        {
-            return (currentState, currentWave, playerLives, enemiesRemaining);
-        }
-
-        /// <summary>
-        /// 获取防守状态
-        /// </summary>
-        public (bool defending, int wave, int health, int maxHealth) GetDefenseStatus()
-        {
-            return (isDefending, waveNumber, nuwaTempleHealth, maxTempleHealth);
-        }
-
-        /// <summary>
-        /// 计算当前难度系数
-        /// </summary>
-        public float GetCurrentDifficultyMultiplier()
-        {
-            return cumulativeDifficulty;
-        }
-
-        /// <summary>
-        /// 生成特定类型的邪魔
-        /// </summary>
-        public GameObject SpawnSpecificEvil(EnemyType type, int waveNum)
-        {
-            // 在实际游戏中，这里会创建特定类型的敌人
-            Debug.Log($"生成特定敌人: {type}, 波次: {waveNum}");
             
-            // 返回虚拟的游戏对象
-            return new GameObject($"Evil_{type}_{waveNum}");
-        }
-
-        /// <summary>
-        /// 邪魔攻击神殿
-        /// </summary>
-        public void EvilAttackedTemple(float damage)
-        {
-            nuwaTempleHealth -= (int)(damage * cumulativeDifficulty);
-
-            if (nuwaTempleHealth <= 0)
+            // 检查胜利条件
+            if (currentState == BattleState.Fighting && enemiesRemaining <= 0 && activeEnemies.Count <= 0)
             {
-                nuwaTempleHealth = 0;
-                Defeat();
+                currentState = BattleState.Victory;
+                OnBattleVictory?.Invoke();
+                Debug.Log("战斗胜利！");
             }
-
-            OnTempleHealthChanged?.Invoke(nuwaTempleHealth);
-
-            Debug.Log($"神殿受到攻击，当前生命值: {nuwaTempleHealth}");
+            
+            // 检查失败条件
+            if (playerLives <= 0)
+            {
+                currentState = BattleState.Defeat;
+                OnBattleDefeat?.Invoke();
+                Debug.Log("战斗失败！");
+            }
         }
 
         /// <summary>
-        /// 邪魔被击败
+        /// 更新防守阶段
         /// </summary>
-        public void EvilDefeated()
+        private void UpdateDefensePhase(float deltaTime)
         {
-            // 在实际游戏中，这里会处理邪魔被击败的逻辑
+            // 检查是否需要开始下一波
+            if (enemiesRemaining <= 0 && activeEnemies.Count <= 0)
+            {
+                StartNextWave();
+            }
         }
 
         /// <summary>
-        /// 完成当前波次
+        /// 敌人被击败
         /// </summary>
-        public void CompleteWave()
+        public void EnemyDefeated(GameObject enemy)
         {
-            WaveCompleted();
+            try
+            {
+                if (activeEnemies.Contains(enemy))
+                {
+                    activeEnemies.Remove(enemy);
+                    
+                    // 给玩家奖励
+                    int coins = UnityEngine.Random.Range(5, 15);
+                    int gems = UnityEngine.Random.Range(0, 3);
+                    float souls = UnityEngine.Random.Range(0.5f, 2.0f);
+                    
+                    // 在实际游戏中，这会更新玩家数据
+                    // GameManager.Instance.PlayerData.AddCoins(coins);
+                    // GameManager.Instance.PlayerData.AddGems(gems);
+                    // GameManager.Instance.PlayerData.AddSouls(souls);
+                    
+                    Debug.Log($"敌人被击败！获得奖励：{coins}金币，{gems}神石，{souls}灵魂");
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"处理敌人被击败时发生错误: {e.Message}");
+            }
         }
 
         /// <summary>
-        /// 开始指定波次
+        /// 敌人到达终点（破坏守护点）
         /// </summary>
-        private void StartWave(int waveNum)
+        public void EnemyReachedEnd(GameObject enemy)
         {
-            currentWave = waveNum;
-            StartNextWave();
+            try
+            {
+                if (activeEnemies.Contains(enemy))
+                {
+                    activeEnemies.Remove(enemy);
+                    playerLives--;
+                    
+                    OnPlayerLifeChanged?.Invoke(playerLives);
+                    
+                    Debug.Log($"敌人突破防线，正在破坏守护点！剩余生命: {playerLives}");
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"处理敌人到达守护点时发生错误: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 获取当前波次信息
+        /// </summary>
+        public (int wave, int remaining, int total) GetWaveInfo()
+        {
+            int totalEnemies = currentWave * 3;
+            return (currentWave, enemiesRemaining, totalEnemies);
+        }
+
+        /// <summary>
+        /// 获取战斗状态
+        /// </summary>
+        public (BattleState state, int lives, int wave, int enemies) GetBattleStatus()
+        {
+            return (currentState, playerLives, currentWave, enemiesRemaining);
+        }
+
+        /// <summary>
+        /// 获取活跃敌人列表
+        /// </summary>
+        public List<GameObject> GetActiveEnemies()
+        {
+            return new List<GameObject>(activeEnemies);
+        }
+
+        /// <summary>
+        /// 清理所有对象
+        /// </summary>
+        private void ClearAllObjects()
+        {
+            // 销毁所有活跃的对象
+            foreach (var enemy in activeEnemies)
+            {
+                if (enemy != null) GameObject.Destroy(enemy);
+            }
+            activeEnemies.Clear();
+            
+            foreach (var kuku in activeKukus)
+            {
+                if (kuku != null) GameObject.Destroy(kuku);
+            }
+            activeKukus.Clear();
+            
+            foreach (var unit in activeUnits)
+            {
+                if (unit != null) GameObject.Destroy(unit);
+            }
+            activeUnits.Clear();
         }
 
         /// <summary>
@@ -529,96 +421,342 @@ namespace KukuWorld.Systems
         /// </summary>
         public void Reset()
         {
-            currentState = BattleState.Setup;
-            currentWave = 1;
-            enemiesRemaining = 0;
-            playerLives = 10;
-            timeUntilNextWave = 5.0f;
-            activeEnemies.Clear();
-            activePets.Clear();
-            activeUnits.Clear();
-            nuwaTempleHealth = maxTempleHealth;
-            waveNumber = 1;
-            evilCount = 0;
-            isDefending = false;
-            cumulativeDifficulty = 1.0f;
+            ClearAllObjects();
+            Initialize();
+        }
+    }
 
-            Debug.Log("战斗系统已重置");
+    /// <summary>
+    /// 敌人控制器
+    /// </summary>
+    public class EnemyController : MonoBehaviour
+    {
+        // 敌人属性
+        private float health;                              // 生命值
+        private float speed;                               // 移动速度
+        private float damage;                              // 造成的伤害
+        private BattleSystem.EnemyType enemyType;          // 敌人类型
+
+        // 目标信息
+        private Transform target;                          // 目标（守护点）
+
+        /// <summary>
+        /// 初始化敌人
+        /// </summary>
+        public void Initialize(float h, float s, float d, BattleSystem.EnemyType type)
+        {
+            health = h;
+            speed = s;
+            damage = d;
+            enemyType = type;
+            
+            // 在实际游戏中，这里会设置目标点（守护点位置）
+            // target = GameObject.FindGameObjectWithTag("GuardianPoint").transform;
+            // 为了演示，我们使用一个假的目标点
+            target = new GameObject("TempTarget").transform;
+            target.position = new Vector3(-10, 0, 0); // 守护点在左侧
+            
+            Debug.Log($"敌人生成，目标是守护点位置: {target.position}");
         }
 
         /// <summary>
-        /// 获取当前波次信息
+        /// Unity Update方法
         /// </summary>
-        public (int currentWave, int enemiesRemaining, float difficulty) GetCurrentWaveInfo()
+        void Update()
         {
-            return (currentWave, enemiesRemaining, cumulativeDifficulty);
-        }
-
-        /// <summary>
-        /// 强制开始战斗
-        /// </summary>
-        public void ForceStartBattle()
-        {
-            currentState = BattleState.DefensePhaseSetup;
-            StartNextWave();
-        }
-
-        /// <summary>
-        /// 设置最大敌人数量
-        /// </summary>
-        public void SetMaxEnemiesOnField(int max)
-        {
-            MaxEnemiesOnField = max;
-        }
-
-        /// <summary>
-        /// 获取当前战斗状态描述
-        /// </summary>
-        public string GetBattleStatusDescription()
-        {
-            switch (currentState)
+            if (health > 0)
             {
-                case BattleState.Setup:
-                    return "设置阶段";
-                case BattleState.CapturePhase:
-                    return "捕捉阶段";
-                case BattleState.DefensePhaseSetup:
-                    return "防守准备";
-                case BattleState.WaveStart:
-                    return $"第 {currentWave} 波开始";
-                case BattleState.Fighting:
-                    return $"战斗中 - 第 {currentWave} 波，剩余敌人: {enemiesRemaining}";
-                case BattleState.Victory:
-                    return "胜利";
-                case BattleState.Defeat:
-                    return "失败";
-                default:
-                    return "未知状态";
+                MoveTowardsGuardianPoint();
             }
         }
 
         /// <summary>
-        /// 检查战斗是否结束
+        /// 移向守护点/建筑目标
         /// </summary>
-        public bool IsBattleFinished()
+        private void MoveTowardsGuardianPoint()
         {
-            return currentState == BattleState.Victory || currentState == BattleState.Defeat;
+            if (target == null) return;
+            
+            // 向目标点移动
+            transform.position = Vector3.MoveTowards(transform.position, target.position, speed * Time.deltaTime);
+            
+            // 检查是否到达目标点
+            if (Vector3.Distance(transform.position, target.position) < 0.5f)
+            {
+                // 到达守护点，开始破坏
+                AttackGuardianPoint();
+            }
         }
 
         /// <summary>
-        /// 获取胜利条件
+        /// 攻击守护点/建筑
         /// </summary>
-        public bool CheckWinCondition()
+        private void AttackGuardianPoint()
         {
-            return currentState == BattleState.Victory;
+            Debug.Log($"敌人到达守护点位置，造成 {damage} 点破坏！");
+            
+            // 通知战斗系统敌人到达目标
+            BattleSystem battleSystem = FindObjectOfType<BattleSystem>();
+            if (battleSystem != null)
+            {
+                battleSystem.EnemyReachedEnd(gameObject);
+            }
+            
+            // 销毁敌人对象
+            Destroy(gameObject);
         }
 
         /// <summary>
-        /// 获取失败条件
+        /// 受到伤害
         /// </summary>
-        public bool CheckLossCondition()
+        public void TakeDamage(float damageAmount)
         {
-            return currentState == BattleState.Defeat;
+            health -= damageAmount;
+            
+            if (health <= 0)
+            {
+                Die();
+            }
+        }
+
+        /// <summary>
+        /// 死亡
+        /// </summary>
+        private void Die()
+        {
+            BattleSystem battleSystem = FindObjectOfType<BattleSystem>();
+            if (battleSystem != null)
+            {
+                battleSystem.EnemyDefeated(gameObject);
+            }
+            
+            // 掉落物品
+            DropItems();
+            
+            Destroy(gameObject);
+        }
+
+        /// <summary>
+        /// 掉落物品
+        /// </summary>
+        private void DropItems()
+        {
+            // 随机掉落金币、神石、灵魂等
+            int coinDrop = UnityEngine.Random.Range(5, 15);
+            int gemDrop = UnityEngine.Random.Range(0, 2);
+            float soulDrop = UnityEngine.Random.Range(0.5f, 1.5f);
+            
+            // 通知玩家获得资源
+            if (GameManager.Instance != null)
+            {
+                GameManager.Instance.PlayerData.AddCoins(coinDrop);
+                GameManager.Instance.PlayerData.AddGems(gemDrop);
+                GameManager.Instance.PlayerData.AddSouls(soulDrop);
+            }
+            
+            Debug.Log($"敌人死亡，掉落：{coinDrop}金币，{gemDrop}神石，{soulDrop}灵魂");
+        }
+    }
+
+    /// <summary>
+    /// KuKu战斗控制器
+    /// </summary>
+    public class KukuCombatController : MonoBehaviour
+    {
+        // KuKu数据
+        private MythicalKukuData kukuData;                           // KuKu数据引用
+        private float attackTimer = 0f;                    // 攻击计时器
+        private float attackCooldown = 1f;                // 攻击冷却时间
+        private List<GameObject> nearbyEnemies = new List<GameObject>(); // 附近敌人列表
+
+        /// <summary>
+        /// 初始化KuKu战斗控制器
+        /// </summary>
+        public void Initialize(MythicalKukuData data)
+        {
+            kukuData = data;
+            attackCooldown = 2f / kukuData.Speed; // 攻击间隔与速度相关
+        }
+
+        /// <summary>
+        /// Unity Update方法
+        /// </summary>
+        void Update()
+        {
+            BattleSystem battleSystem = FindObjectOfType<BattleSystem>();
+            if (battleSystem != null)
+            {
+                AttackNearestEnemy();
+            }
+        }
+
+        /// <summary>
+        /// 攻击最近的敌人
+        /// </summary>
+        private void AttackNearestEnemy()
+        {
+            attackTimer += Time.deltaTime;
+            
+            if (attackTimer >= attackCooldown)
+            {
+                // 寻找最近的敌人
+                GameObject nearestEnemy = FindNearestEnemy();
+                
+                if (nearestEnemy != null)
+                {
+                    // 执行攻击
+                    ExecuteAttack(nearestEnemy);
+                    attackTimer = 0f;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 寻找最近的敌人
+        /// </summary>
+        private GameObject FindNearestEnemy()
+        {
+            GameObject nearest = null;
+            float nearestDistance = float.MaxValue;
+            
+            BattleSystem battleSystem = FindObjectOfType<BattleSystem>();
+            if (battleSystem != null)
+            {
+                // 遍历所有活跃敌人
+                foreach (GameObject enemy in battleSystem.GetActiveEnemies())
+                {
+                    if (enemy == null) continue;
+                    
+                    float distance = Vector3.Distance(transform.position, enemy.transform.position);
+                    if (distance < nearestDistance)
+                    {
+                        nearestDistance = distance;
+                        nearest = enemy;
+                    }
+                }
+            }
+            
+            return nearest;
+        }
+
+        /// <summary>
+        /// 执行攻击
+        /// </summary>
+        private void ExecuteAttack(GameObject enemy)
+        {
+            if (enemy != null)
+            {
+                // 对敌人造成伤害
+                EnemyController enemyController = enemy.GetComponent<EnemyController>();
+                if (enemyController != null)
+                {
+                    enemyController.TakeDamage(kukuData.AttackPower);
+                    Debug.Log($"{kukuData.Name} 攻击了敌人，造成 {kukuData.AttackPower} 点伤害");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 单位战斗控制器
+    /// </summary>
+    public class UnitCombatController : MonoBehaviour
+    {
+        // 单位数据
+        private UnitData unitData;                           // 单位数据引用
+        private float attackTimer = 0f;                    // 攻击计时器
+        private float attackCooldown = 1f;                // 攻击冷却时间
+
+        /// <summary>
+        /// 初始化单位战斗控制器
+        /// </summary>
+        public void Initialize(UnitData data)
+        {
+            unitData = data;
+            attackCooldown = 2f / unitData.Speed; // 攻击间隔与速度相关
+        }
+
+        /// <summary>
+        /// Unity Update方法
+        /// </summary>
+        void Update()
+        {
+            BattleSystem battleSystem = FindObjectOfType<BattleSystem>();
+            if (battleSystem != null)
+            {
+                AttackNearestEnemy();
+            }
+        }
+
+        /// <summary>
+        /// 攻击最近的敌人
+        /// </summary>
+        private void AttackNearestEnemy()
+        {
+            attackTimer += Time.deltaTime;
+            
+            if (attackTimer >= attackCooldown)
+            {
+                // 寻找最近的敌人
+                GameObject nearestEnemy = FindNearestEnemy();
+                
+                if (nearestEnemy != null)
+                {
+                    // 执行攻击
+                    ExecuteAttack(nearestEnemy);
+                    attackTimer = 0f;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 寻找最近的敌人
+        /// </summary>
+        private GameObject FindNearestEnemy()
+        {
+            GameObject nearest = null;
+            float nearestDistance = float.MaxValue;
+            
+            BattleSystem battleSystem = FindObjectOfType<BattleSystem>();
+            if (battleSystem != null)
+            {
+                // 遍历所有活跃敌人
+                foreach (GameObject enemy in battleSystem.GetActiveEnemies())
+                {
+                    if (enemy == null) continue;
+                    
+                    float distance = Vector3.Distance(transform.position, enemy.transform.position);
+                    if (distance < nearestDistance)
+                    {
+                        nearestDistance = distance;
+                        nearest = enemy;
+                    }
+                }
+            }
+            
+            return nearest;
+        }
+
+        /// <summary>
+        /// 执行攻击
+        /// </summary>
+        private void ExecuteAttack(GameObject enemy)
+        {
+            if (enemy != null)
+            {
+                // 对敌人造成伤害
+                EnemyController enemyController = enemy.GetComponent<EnemyController>();
+                if (enemyController != null)
+                {
+                    float totalAttack = unitData.AttackPower;
+                    // 加上装备加成
+                    var totalAttrs = unitData.GetTotalAttributes();
+                    totalAttack = totalAttrs.atk;
+                    
+                    enemyController.TakeDamage(totalAttack);
+                    Debug.Log($"{unitData.Name} 攻击了敌人，造成 {totalAttack} 点伤害");
+                }
+            }
         }
     }
 }

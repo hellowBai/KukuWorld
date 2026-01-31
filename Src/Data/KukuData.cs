@@ -16,7 +16,7 @@ namespace KukuWorld.Data
 
         // 稀有度
         public RarityType Rarity { get; set; }
-        public enum RarityType { Common = 0, Rare = 1, Epic = 2, Legendary = 3, Mythic = 4 }
+        public enum RarityType { Common, Rare, Epic, Legendary, Mythic }
 
         // 战斗属性
         public float AttackPower { get; set; }
@@ -43,33 +43,34 @@ namespace KukuWorld.Data
         public bool CanAbsorbSoul { get; set; }
         public float SoulAbsorptionRate { get; set; }
 
-        // 构造函数
         public KukuData()
         {
+            // 设置默认值
+            Id = UnityEngine.Random.Range(1, 9999);
             Name = "KuKu";
-            Description = "一只可爱的KuKu";
+            Description = "一个神秘的KuKu";
             Rarity = RarityType.Common;
             AttackPower = 10f;
             DefensePower = 5f;
             Speed = 1f;
             Health = 50f;
+            SpriteName = "kuku_default";
             Tint = Color.white;
             IsCollected = false;
             Level = 1;
             Experience = 0f;
-            SkillName = "无技能";
-            SkillDamage = 0f;
-            SkillCooldown = 5f;
+            SkillName = "Basic Attack";
+            SkillDamage = 5f;
+            SkillCooldown = 2f;
             CaptureDifficulty = 1.0f;
             CanAbsorbSoul = false;
             SoulAbsorptionRate = 0.1f;
-            SpriteName = "DefaultKukuSprite";
         }
 
         /// <summary>
         /// 获取稀有度颜色
         /// </summary>
-        public Color GetRarityColor()
+        public virtual Color GetRarityColor()
         {
             switch (Rarity)
             {
@@ -84,51 +85,29 @@ namespace KukuWorld.Data
                 case RarityType.Mythic:
                     return Color.red;
                 default:
-                    return Color.gray;
-            }
-        }
-
-        /// <summary>
-        /// 获取稀有度名称
-        /// </summary>
-        public string GetRarityName()
-        {
-            switch (Rarity)
-            {
-                case RarityType.Common:
-                    return "普通";
-                case RarityType.Rare:
-                    return "稀有";
-                case RarityType.Epic:
-                    return "史诗";
-                case RarityType.Legendary:
-                    return "传说";
-                case RarityType.Mythic:
-                    return "神话";
-                default:
-                    return "未知";
+                    return Color.white;
             }
         }
 
         /// <summary>
         /// 升级KuKu
         /// </summary>
-        public void LevelUp()
+        public virtual void LevelUp()
         {
             Level++;
-            // 提升基础属性
-            AttackPower *= 1.1f;
-            DefensePower *= 1.1f;
-            Health *= 1.1f;
+            // 属性随等级提升
+            Health += 10f;
+            AttackPower += 2f;
+            DefensePower += 1f;
         }
 
         /// <summary>
         /// 添加经验值
         /// </summary>
-        public bool AddExperience(float exp)
+        public virtual bool AddExperience(float exp)
         {
             Experience += exp;
-            // 假设每100经验升一级
+            // 每100经验升一级
             while (Experience >= 100)
             {
                 Experience -= 100;
@@ -140,38 +119,31 @@ namespace KukuWorld.Data
         /// <summary>
         /// 吸收灵魂进行进化
         /// </summary>
-        public bool AbsorbSoul(float soulPower)
+        public virtual bool AbsorbSoul(float soulPower)
         {
-            if (!CanAbsorbSoul || soulPower <= 0)
-                return false;
-
-            // 根据灵魂吸收率计算实际吸收量
-            float absorbed = soulPower * SoulAbsorptionRate;
+            if (!CanAbsorbSoul) return false;
             
-            // 吸收的灵魂可能用于提升属性或进化
-            Health += absorbed * 2f;
-            AttackPower += absorbed * 0.5f;
-            DefensePower += absorbed * 0.3f;
-
+            // 灵魂吸收逻辑
+            float absorption = soulPower * SoulAbsorptionRate;
+            AddExperience(absorption * 10); // 转化为经验值
             return true;
         }
 
         /// <summary>
         /// 获取捕捉成功率
         /// </summary>
-        public float GetCaptureSuccessRate(float playerPower)
+        public virtual float GetCaptureSuccessRate(float playerPower)
         {
-            // 根据捕捉难度和玩家实力计算成功率
-            float baseRate = 1.0f - CaptureDifficulty;
-            float playerAdvantage = Mathf.Clamp(playerPower / (playerPower + AttackPower), 0.1f, 1.0f);
-            
-            return Mathf.Clamp01(baseRate * playerAdvantage);
+            // 计算捕捉成功率，基于玩家实力和捕捉难度
+            float baseRate = 0.5f; // 基础成功率
+            float powerFactor = playerPower / (playerPower + AttackPower * CaptureDifficulty);
+            return baseRate * powerFactor;
         }
 
         /// <summary>
-        /// 复制当前KuKu数据
+        /// 克隆KuKu数据
         /// </summary>
-        public KukuData Clone()
+        public virtual KukuData Clone()
         {
             return new KukuData
             {
@@ -195,14 +167,6 @@ namespace KukuWorld.Data
                 CanAbsorbSoul = this.CanAbsorbSoul,
                 SoulAbsorptionRate = this.SoulAbsorptionRate
             };
-        }
-
-        /// <summary>
-        /// 重写ToString方法
-        /// </summary>
-        public override string ToString()
-        {
-            return $"{Name} [{GetRarityName()}] - Lv.{Level}";
         }
     }
 }
