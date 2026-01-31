@@ -27,6 +27,8 @@ namespace KukuWorld.Systems
         // 事件系统
         public event Action<int, int> OnWaveChanged;      // 波次变化事件 (当前波次, 剩余敌人)
         public event Action<int> OnPlayerLifeChanged;     // 玩家生命值变化事件 (剩余生命)
+        public event Action<int> OnWaveStarted;           // 波次开始事件 (波次数)
+        public event Action<int> OnEnemyReachedTarget;    // 敌人到达目标事件 (剩余生命)
         public event Action OnBattleVictory;              // 战斗胜利事件
         public event Action OnBattleDefeat;               // 战斗失败事件
         public event Action<float> OnBattleUpdate;        // 战斗更新事件 (游戏时间)
@@ -230,6 +232,7 @@ namespace KukuWorld.Systems
                 
                 // 通知UI更新
                 OnWaveChanged?.Invoke(currentWave, enemiesRemaining);
+                OnWaveStarted?.Invoke(currentWave);
                 
                 Debug.Log($"第 {currentWave} 波敌人来袭，共 {enemyCount} 只敌人，守护守护点！");
                 
@@ -356,6 +359,7 @@ namespace KukuWorld.Systems
                     playerLives--;
                     
                     OnPlayerLifeChanged?.Invoke(playerLives);
+                    OnEnemyReachedTarget?.Invoke(playerLives);
                     
                     Debug.Log($"敌人突破防线，正在破坏守护点！剩余生命: {playerLives}");
                 }

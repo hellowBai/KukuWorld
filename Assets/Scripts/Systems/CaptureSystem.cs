@@ -10,6 +10,12 @@ namespace KukuWorld.Systems
     /// </summary>
     public static class CaptureSystem
     {
+        // 事件定义
+        public static event Action<int> OnWildKukuSpawned;      // 野生KuKu生成事件
+        public static event Action<int> OnWildKukuCaptured;     // 野生KuKu被捕获事件
+        public static event Action<int, string> OnCaptureAttempt; // 捕捉尝试事件
+        public static event Action<int, float> OnWildKukuDamaged; // 野生KuKu受伤事件
+        
         // 野外KuKu结构
         public struct WildKuku
         {
@@ -112,6 +118,9 @@ namespace KukuWorld.Systems
                 // 添加到列表
                 wildKukus.Add(wild);
                 
+                // 触发生成事件
+                OnWildKukuSpawned?.Invoke(wildKuku.Id);
+                
                 Debug.Log($"在位置 {position} 生成了野生KuKu: {wildKuku.Name}");
             }
             catch (Exception e)
@@ -203,6 +212,9 @@ namespace KukuWorld.Systems
                         {
                             drops.Add(new ItemDrop(ItemDrop.ItemType.KukuEgg, 0, 1));
                         }
+                        
+                        // 触发捕获事件
+                        OnWildKukuCaptured?.Invoke(wild.kukuData.Id);
                         
                         // 从野外列表中移除
                         wildKukus.RemoveAt(i);

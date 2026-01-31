@@ -7,13 +7,8 @@ namespace KukuWorld.Data
     /// 神话KuKu数据结构 - 继承自KukuData
     /// </summary>
     [Serializable]
-    public class MythicalKukuData
+    public class MythicalKukuData : KukuData
     {
-        // 基础信息
-        public int Id { get; set; }
-        public string Name { get; set; }
-        public string Description { get; set; }
-        
         // 神话背景
         public string MythologicalBackground { get; set; }
         public string Element { get; set; }
@@ -24,19 +19,13 @@ namespace KukuWorld.Data
         public float SkillRange { get; set; }
         public float SkillPower { get; set; }
         
-        // 战斗属性
-        public float AttackPower { get; set; }
-        public float DefensePower { get; set; }
-        public float Speed { get; set; }
-        public float Health { get; set; }
-        
         // 神话属性加成
         public float DivinePower { get; set; }
         public float ProtectionPower { get; set; }
         public float PurificationPower { get; set; }
         
-        // 稀有度
-        public MythicalRarity Rarity { get; set; }
+        // 神话稀有度
+        public MythicalRarity MythicalRarityType { get; set; }
         public enum MythicalRarity { 
             Celestial = 0,     // 天界
             Immortal = 1,      // 仙人
@@ -56,13 +45,6 @@ namespace KukuWorld.Data
         public bool CanFuseWithRobots { get; set; }
         public float FusionCompatibility { get; set; }
         
-        // 状态和等级
-        public int Level { get; set; }
-        public float Experience { get; set; }
-        
-        // 视觉相关
-        public string SpriteName { get; set; }
-        
         // 装备相关
         public int MaxEquipmentSlots { get; set; }
         
@@ -70,27 +52,25 @@ namespace KukuWorld.Data
         public bool IsFavorite { get; set; }
         public DateTime CaptureDate { get; set; }
         public string CaptureLocation { get; set; }
-        public float CaptureDifficulty { get; set; }
 
         public MythicalKukuData()
         {
-            // 初始化默认值
+            // 初始化默认值（从基类继承的属性）
             Name = "神秘KuKu";
             Description = "一只神秘的KuKu";
+            Rarity = KukuData.RarityType.Mythic; // 设置为神话稀有度
+            
+            // 神话特定属性
             MythologicalBackground = "来自远古神话的神秘生物";
             Element = "None";
             SkillType = "None";
             SkillDescription = "无技能";
             SkillRange = 2f;
             SkillPower = 10f;
-            AttackPower = 20f;
-            DefensePower = 15f;
-            Speed = 2f;
-            Health = 80f;
-            DivinePower = 5f;
-            ProtectionPower = 3f;
-            PurificationPower = 2f;
-            Rarity = MythicalRarity.Celestial;
+            DivinePower = 20f;
+            ProtectionPower = 15f;
+            PurificationPower = 10f;
+            MythicalRarityType = MythicalRarity.Celestial;
             EvolutionLevel = 1;
             EvolutionProgress = 0f;
             EvolutionStonesRequired = 10;
@@ -98,14 +78,10 @@ namespace KukuWorld.Data
             SoulAbsorptionRate = 0.5f;
             CanFuseWithRobots = false;
             FusionCompatibility = 0.5f;
-            Level = 1;
-            Experience = 0f;
-            SpriteName = "DefaultSprite";
             MaxEquipmentSlots = 0;
             IsFavorite = false;
             CaptureDate = DateTime.Now;
             CaptureLocation = "Unknown";
-            CaptureDifficulty = 1.0f;
         }
         
         /// <summary>
@@ -113,7 +89,7 @@ namespace KukuWorld.Data
         /// </summary>
         public Color GetMythicalRarityColor()
         {
-            switch (Rarity)
+            switch (MythicalRarityType)
             {
                 case MythicalRarity.Celestial:
                     return Color.blue;
@@ -135,7 +111,7 @@ namespace KukuWorld.Data
         /// </summary>
         public string GetMythicalRarityName()
         {
-            switch (Rarity)
+            switch (MythicalRarityType)
             {
                 case MythicalRarity.Celestial:
                     return "天界";
@@ -150,6 +126,14 @@ namespace KukuWorld.Data
                 default:
                     return "未知";
             }
+        }
+        
+        /// <summary>
+        /// 获取稀有度名称 (与基类接口一致)
+        /// </summary>
+        public string GetRarityName()
+        {
+            return GetMythicalRarityName();
         }
         
         /// <summary>
@@ -174,41 +158,51 @@ namespace KukuWorld.Data
         /// </summary>
         public MythicalKukuData Clone()
         {
-            return new MythicalKukuData
+            MythicalKukuData clone = new MythicalKukuData
             {
+                // 从基类继承的属性
                 Id = this.Id,
                 Name = this.Name,
                 Description = this.Description,
+                Rarity = this.Rarity,
+                AttackPower = this.AttackPower,
+                DefensePower = this.DefensePower,
+                Speed = this.Speed,
+                Health = this.Health,
+                SpriteName = this.SpriteName,
+                Tint = this.Tint,
+                IsCollected = this.IsCollected,
+                Level = this.Level,
+                Experience = this.Experience,
+                SkillName = this.SkillName,
+                SkillDamage = this.SkillDamage,
+                SkillCooldown = this.SkillCooldown,
+                CaptureDifficulty = this.CaptureDifficulty,
+                CanAbsorbSoul = this.CanAbsorbSoul,
+                SoulAbsorptionRate = this.SoulAbsorptionRate,
+                
+                // 神话特定属性
                 MythologicalBackground = this.MythologicalBackground,
                 Element = this.Element,
                 SkillType = this.SkillType,
                 SkillDescription = this.SkillDescription,
                 SkillRange = this.SkillRange,
                 SkillPower = this.SkillPower,
-                AttackPower = this.AttackPower,
-                DefensePower = this.DefensePower,
-                Speed = this.Speed,
-                Health = this.Health,
                 DivinePower = this.DivinePower,
                 ProtectionPower = this.ProtectionPower,
                 PurificationPower = this.PurificationPower,
-                Rarity = this.Rarity,
+                MythicalRarityType = this.MythicalRarityType,
                 EvolutionLevel = this.EvolutionLevel,
                 EvolutionProgress = this.EvolutionProgress,
                 EvolutionStonesRequired = this.EvolutionStonesRequired,
-                CanAbsorbSoul = this.CanAbsorbSoul,
-                SoulAbsorptionRate = this.SoulAbsorptionRate,
                 CanFuseWithRobots = this.CanFuseWithRobots,
                 FusionCompatibility = this.FusionCompatibility,
-                Level = this.Level,
-                Experience = this.Experience,
-                SpriteName = this.SpriteName,
                 MaxEquipmentSlots = this.MaxEquipmentSlots,
                 IsFavorite = this.IsFavorite,
                 CaptureDate = this.CaptureDate,
-                CaptureLocation = this.CaptureLocation,
-                CaptureDifficulty = this.CaptureDifficulty
+                CaptureLocation = this.CaptureLocation
             };
+            return clone;
         }
     }
 }

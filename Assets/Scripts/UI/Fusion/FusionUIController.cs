@@ -118,11 +118,12 @@ namespace KukuWorld.UI
         /// </summary>
         private void OnGameStateChange(GameManager.GameState newState)
         {
-            if (newState == GameManager.GameState.Shop) // 假设融合功能在商店中
+            if (newState == GameManager.GameState.CapturePhase || newState == GameManager.GameState.DefensePhase)
             {
-                OpenFusionPanel();
+                // 在捕捉阶段或防守阶段期间，如果需要可打开融合面板
+                // 这里可以根据具体需求调整
             }
-            else if (newState != GameManager.GameState.Shop)
+            else if (newState == GameManager.GameState.MainMenu)
             {
                 CloseFusionPanel();
             }

@@ -129,11 +129,13 @@ namespace KukuWorld.UI
         /// </summary>
         private void OnGameStateChange(GameManager.GameState newState)
         {
-            if (newState == GameManager.GameState.Shop)
+            // 根据实际的游戏流程，商店可能在捕捉阶段或防守阶段之间打开
+            // 这里暂时保持面板状态，具体逻辑可根据游戏设计调整
+            if (newState == GameManager.GameState.CapturePhase || newState == GameManager.GameState.DefensePhase)
             {
-                OpenShopPanel();
+                // 根据具体设计决定是否打开商店面板
             }
-            else if (newState != GameManager.GameState.Shop)
+            else if (newState == GameManager.GameState.MainMenu)
             {
                 CloseShopPanel();
             }
