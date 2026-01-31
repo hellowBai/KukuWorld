@@ -30,6 +30,8 @@ KukuWorld/
 ├── Assets/                 # Unity资源文件
 ├── Src/                   # 源代码
 │   ├── Core/              # 核心框架
+│   ├── Controllers/       # 控制器
+│   ├── Data/              # 数据管理
 │   ├── Gameplay/          # 游戏玩法逻辑
 │   │   ├── Capture/       # 捕捉系统
 │   │   ├── Combat/        # 战斗系统
@@ -38,11 +40,11 @@ KukuWorld/
 │   │   └── Collection/    # 收集系统（游戏外）
 │   ├── Systems/           # 各类系统
 │   │   ├── Building/      # 建筑系统
-│   │   ├── Unit/          # 单位系统
-│   │   ├── Weapon/        # 武器系统
 │   │   ├── Equipment/     # 装备系统
 │   │   ├── Evolution/     # 进化系统
-│   │   └── Player/        # 玩家系统
+│   │   ├── Player/        # 玩家系统
+│   │   ├── Unit/          # 单位系统
+│   │   └── Weapon/        # 武器系统
 │   ├── UI/                # 用户界面
 │   │   ├── Common/        # 通用UI组件
 │   │   ├── Capture/       # 捕捉界面
@@ -50,10 +52,9 @@ KukuWorld/
 │   │   ├── Fusion/        # 融合界面
 │   │   ├── Collection/    # 收集界面（游戏外）
 │   │   └── Shop/          # 商店界面
-│   ├── Data/              # 数据管理
 │   └── Utils/             # 工具类
 ├── Docs/                  # 文档
-│   └── Design/            # 设计文档
+├── Tests/                 # 测试代码
 └── Build/                 # 构建输出
 ```
 
