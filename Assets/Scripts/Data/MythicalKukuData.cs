@@ -1,209 +1,214 @@
-using UnityEngine;
 using System;
+using UnityEngine;
 
-// Unity序列化的神话KuKu数据类
-[System.Serializable]
-public class MythicalKukuData
+namespace KukuWorld.Data
 {
-    public int Id { get; set; }
-    public string Name { get; set; }
-    public string Description { get; set; }
-    public MythicalRarity Rarity { get; set; }
-    public float AttackPower { get; set; }
-    public float DefensePower { get; set; }
-    public float Speed { get; set; }
-    public float Health { get; set; }
-    public string SpriteName { get; set; }
-    public Color Tint { get; set; }
-    public bool IsCollected { get; set; }
-    public int Level { get; set; }
-    public int Experience { get; set; }
-    public string SkillName { get; set; }
-    public float SkillDamage { get; set; }
-    public float SkillCooldown { get; set; }
-    public float CaptureDifficulty { get; set; }
-    public bool CanAbsorbSoul { get; set; }
-    public float SoulAbsorptionRate { get; set; }
-    public float EvolutionStonesRequired { get; set; }
-    
-    // 神话属性
-    public float DivinePower { get; set; }     // 神力
-    public float ProtectionPower { get; set; } // 护体力量
-    public float PurificationPower { get; set; } // 净化力量
-    
-    public enum MythicalRarity
+    /// <summary>
+    /// 神话KuKu数据结构 - 继承自KukuData
+    /// </summary>
+    [Serializable]
+    public class MythicalKukuData
     {
-        Celestial,      // 天界
-        Immortal,       // 仙人
-        DivineBeast,    // 神兽
-        Sacred,         // 圣者
-        Primordial      // 元始
-    }
-    
-    public MythicalKukuData()
-    {
-        Tint = Color.white;
-        IsCollected = false;
-        Level = 1;
-        Experience = 0;
-        AttackPower = 10f;
-        DefensePower = 5f;
-        Speed = 1f;
-        Health = 50f;
-        CaptureDifficulty = 1.0f;
-        CanAbsorbSoul = false;
-        SoulAbsorptionRate = 0.1f;
-        EvolutionStonesRequired = 10f;
+        // 基础信息
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public string Description { get; set; }
         
-        // 神话属性
-        DivinePower = 5f;
-        ProtectionPower = 3f;
-        PurificationPower = 2f;
-    }
-    
-    public MythicalKukuData Clone()
-    {
-        return new MythicalKukuData
-        {
-            Id = this.Id,
-            Name = this.Name,
-            Description = this.Description,
-            Rarity = this.Rarity,
-            AttackPower = this.AttackPower,
-            DefensePower = this.DefensePower,
-            Speed = this.Speed,
-            Health = this.Health,
-            SpriteName = this.SpriteName,
-            Tint = this.Tint,
-            IsCollected = this.IsCollected,
-            Level = this.Level,
-            Experience = this.Experience,
-            SkillName = this.SkillName,
-            SkillDamage = this.SkillDamage,
-            SkillCooldown = this.SkillCooldown,
-            CaptureDifficulty = this.CaptureDifficulty,
-            CanAbsorbSoul = this.CanAbsorbSoul,
-            SoulAbsorptionRate = this.SoulAbsorptionRate,
-            EvolutionStonesRequired = this.EvolutionStonesRequired,
-            DivinePower = this.DivinePower,
-            ProtectionPower = this.ProtectionPower,
-            PurificationPower = this.PurificationPower
-        };
-    }
-    
-    public string GetRarityName()
-    {
-        switch (Rarity)
-        {
-            case MythicalRarity.Celestial: return "天界";
-            case MythicalRarity.Immortal: return "仙人";
-            case MythicalRarity.DivineBeast: return "神兽";
-            case MythicalRarity.Sacred: return "圣者";
-            case MythicalRarity.Primordial: return "元始";
-            default: return "未知";
-        }
-    }
-    
-    public Color GetRarityColor()
-    {
-        switch (Rarity)
-        {
-            case MythicalRarity.Celestial: return Color.blue;      // 天蓝色
-            case MythicalRarity.Immortal: return Color.cyan;       // 青色
-            case MythicalRarity.DivineBeast: return Color.magenta; // 洋红色
-            case MythicalRarity.Sacred: return Color.yellow;      // 黄色
-            case MythicalRarity.Primordial: return Color.red;     // 红色
-            default: return Color.gray;
-        }
-    }
-    
-    public int GetExpForNextLevel()
-    {
-        return Level * 150; // 神话KuKu需要更多经验
-    }
-    
-    public bool CanEvolve()
-    {
-        return Experience >= GetExpForNextLevel();
-    }
-    
-    public void AddExperience(int exp)
-    {
-        Experience += exp;
+        // 神话背景
+        public string MythologicalBackground { get; set; }
+        public string Element { get; set; }
         
-        // 检查升级
-        while (Experience >= GetExpForNextLevel() && GetExpForNextLevel() > 0)
-        {
-            LevelUp();
+        // 神话技能系统
+        public string SkillType { get; set; }
+        public string SkillDescription { get; set; }
+        public float SkillRange { get; set; }
+        public float SkillPower { get; set; }
+        
+        // 战斗属性
+        public float AttackPower { get; set; }
+        public float DefensePower { get; set; }
+        public float Speed { get; set; }
+        public float Health { get; set; }
+        
+        // 神话属性加成
+        public float DivinePower { get; set; }
+        public float ProtectionPower { get; set; }
+        public float PurificationPower { get; set; }
+        
+        // 稀有度
+        public MythicalRarity Rarity { get; set; }
+        public enum MythicalRarity { 
+            Celestial = 0,     // 天界
+            Immortal = 1,      // 仙人
+            DivineBeast = 2,   // 神兽
+            Sacred = 3,        // 圣者
+            Primordial = 4     // 元始
         }
-    }
-    
-    void LevelUp()
-    {
-        if (Experience >= GetExpForNextLevel())
+        
+        // 进化相关
+        public int EvolutionLevel { get; set; }
+        public float EvolutionProgress { get; set; }
+        public int EvolutionStonesRequired { get; set; }
+        public bool CanAbsorbSoul { get; set; }
+        public float SoulAbsorptionRate { get; set; }
+        
+        // 融合相关
+        public bool CanFuseWithRobots { get; set; }
+        public float FusionCompatibility { get; set; }
+        
+        // 状态和等级
+        public int Level { get; set; }
+        public float Experience { get; set; }
+        
+        // 视觉相关
+        public string SpriteName { get; set; }
+        
+        // 装备相关
+        public int MaxEquipmentSlots { get; set; }
+        
+        // 其他属性
+        public bool IsFavorite { get; set; }
+        public DateTime CaptureDate { get; set; }
+        public string CaptureLocation { get; set; }
+        public float CaptureDifficulty { get; set; }
+
+        public MythicalKukuData()
         {
-            Experience -= GetExpForNextLevel();
-            Level++;
-            
-            // 提升基础属性
-            AttackPower *= 1.12f;
-            DefensePower *= 1.12f;
-            Health *= 1.12f;
-            DivinePower *= 1.1f;
-            ProtectionPower *= 1.1f;
-            PurificationPower *= 1.1f;
+            // 初始化默认值
+            Name = "神秘KuKu";
+            Description = "一只神秘的KuKu";
+            MythologicalBackground = "来自远古神话的神秘生物";
+            Element = "None";
+            SkillType = "None";
+            SkillDescription = "无技能";
+            SkillRange = 2f;
+            SkillPower = 10f;
+            AttackPower = 20f;
+            DefensePower = 15f;
+            Speed = 2f;
+            Health = 80f;
+            DivinePower = 5f;
+            ProtectionPower = 3f;
+            PurificationPower = 2f;
+            Rarity = MythicalRarity.Celestial;
+            EvolutionLevel = 1;
+            EvolutionProgress = 0f;
+            EvolutionStonesRequired = 10;
+            CanAbsorbSoul = true;
+            SoulAbsorptionRate = 0.5f;
+            CanFuseWithRobots = false;
+            FusionCompatibility = 0.5f;
+            Level = 1;
+            Experience = 0f;
+            SpriteName = "DefaultSprite";
+            MaxEquipmentSlots = 0;
+            IsFavorite = false;
+            CaptureDate = DateTime.Now;
+            CaptureLocation = "Unknown";
+            CaptureDifficulty = 1.0f;
         }
-    }
-    
-    public static string GetRarityDescription(MythicalRarity rarity)
-    {
-        switch (rarity)
+        
+        /// <summary>
+        /// 获取神话稀有度颜色
+        /// </summary>
+        public Color GetMythicalRarityColor()
         {
-            case MythicalRarity.Celestial:
-                return "天界级别的存在，拥有神圣的力量";
-            case MythicalRarity.Immortal:
-                return "仙人级别的存在，具有不朽的能力";
-            case MythicalRarity.DivineBeast:
-                return "神兽级别的存在，拥有强大的自然力量";
-            case MythicalRarity.Sacred:
-                return "圣者级别的存在，具有净化一切邪恶的力量";
-            case MythicalRarity.Primordial:
-                return "元始级别的存在，创世之初的古老力量";
-            default:
-                return "未知级别的存在";
+            switch (Rarity)
+            {
+                case MythicalRarity.Celestial:
+                    return Color.blue;
+                case MythicalRarity.Immortal:
+                    return Color.cyan;
+                case MythicalRarity.DivineBeast:
+                    return Color.magenta;
+                case MythicalRarity.Sacred:
+                    return Color.yellow;
+                case MythicalRarity.Primordial:
+                    return Color.red;
+                default:
+                    return Color.gray;
+            }
         }
-    }
-    
-    public float GetTotalPower()
-    {
-        return AttackPower + DefensePower + DivinePower + ProtectionPower + PurificationPower;
-    }
-    
-    public float GetCombatEffectiveness()
-    {
-        return (AttackPower * 0.3f) + (DefensePower * 0.2f) + (DivinePower * 0.2f) + 
-               (ProtectionPower * 0.15f) + (PurificationPower * 0.15f);
-    }
-    
-    public bool IsMythical()
-    {
-        return true; // 所有此类都是神话级别
-    }
-    
-    public MythicalKukuData UpgradeRarity()
-    {
-        if ((int)Rarity < 4) // 不是最高稀有度
+        
+        /// <summary>
+        /// 获取神话稀有度名称
+        /// </summary>
+        public string GetMythicalRarityName()
         {
-            var upgraded = Clone();
-            upgraded.Rarity = (MythicalRarity)((int)Rarity + 1);
-            upgraded.AttackPower *= 1.5f;
-            upgraded.DefensePower *= 1.5f;
-            upgraded.Health *= 1.5f;
-            upgraded.DivinePower *= 1.5f;
-            upgraded.ProtectionPower *= 1.5f;
-            upgraded.PurificationPower *= 1.5f;
-            return upgraded;
+            switch (Rarity)
+            {
+                case MythicalRarity.Celestial:
+                    return "天界";
+                case MythicalRarity.Immortal:
+                    return "仙人";
+                case MythicalRarity.DivineBeast:
+                    return "神兽";
+                case MythicalRarity.Sacred:
+                    return "圣者";
+                case MythicalRarity.Primordial:
+                    return "元始";
+                default:
+                    return "未知";
+            }
         }
-        return this; // 已经是最高稀有度
+        
+        /// <summary>
+        /// 检查是否可以与机器人融合
+        /// </summary>
+        public bool CanFuseWithRobot(UnitData robot)
+        {
+            // 需要达到最高等级（5级）且机器人也需要达到一定等级
+            return EvolutionLevel >= 5 && robot != null && robot.Level >= 10 && CanFuseWithRobots;
+        }
+        
+        /// <summary>
+        /// 重写ToString方法
+        /// </summary>
+        public override string ToString()
+        {
+            return $"{Name} [{GetMythicalRarityName()}] - Lv.{Level} Evol.{EvolutionLevel}";
+        }
+        
+        /// <summary>
+        /// 复制当前KuKu数据
+        /// </summary>
+        public MythicalKukuData Clone()
+        {
+            return new MythicalKukuData
+            {
+                Id = this.Id,
+                Name = this.Name,
+                Description = this.Description,
+                MythologicalBackground = this.MythologicalBackground,
+                Element = this.Element,
+                SkillType = this.SkillType,
+                SkillDescription = this.SkillDescription,
+                SkillRange = this.SkillRange,
+                SkillPower = this.SkillPower,
+                AttackPower = this.AttackPower,
+                DefensePower = this.DefensePower,
+                Speed = this.Speed,
+                Health = this.Health,
+                DivinePower = this.DivinePower,
+                ProtectionPower = this.ProtectionPower,
+                PurificationPower = this.PurificationPower,
+                Rarity = this.Rarity,
+                EvolutionLevel = this.EvolutionLevel,
+                EvolutionProgress = this.EvolutionProgress,
+                EvolutionStonesRequired = this.EvolutionStonesRequired,
+                CanAbsorbSoul = this.CanAbsorbSoul,
+                SoulAbsorptionRate = this.SoulAbsorptionRate,
+                CanFuseWithRobots = this.CanFuseWithRobots,
+                FusionCompatibility = this.FusionCompatibility,
+                Level = this.Level,
+                Experience = this.Experience,
+                SpriteName = this.SpriteName,
+                MaxEquipmentSlots = this.MaxEquipmentSlots,
+                IsFavorite = this.IsFavorite,
+                CaptureDate = this.CaptureDate,
+                CaptureLocation = this.CaptureLocation,
+                CaptureDifficulty = this.CaptureDifficulty
+            };
+        }
     }
 }

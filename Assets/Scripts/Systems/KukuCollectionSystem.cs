@@ -1,515 +1,517 @@
-using UnityEngine;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine;
+using KukuWorld.Data;
 
-public class KukuCollectionSystem : MonoBehaviour
+namespace KukuWorld.Systems
 {
-    [Header("收集系统设置")]
-    public int maxCollectionSlots = 50;
-    public int maxFavorites = 10;
-    
-    private GameManager gameManager;
-    private PlayerData playerData;
-    
-    // 收藏夹
-    private List<int> favoriteKukuIds = new List<int>();
-    
-    // 事件
-    public System.Action<MythicalKukuData> OnKukuAddedToCollection;
-    public System.Action<int> OnKukuRemovedFromCollection;
-    public System.Action<int> OnKukuAddedToFavorites;
-    public System.Action<int> OnKukuRemovedFromFavorites;
-    public System.Action<string> OnCollectionError;
-    
-    void Start()
-    {
-        Initialize();
-    }
-    
-    public void Initialize()
-    {
-        gameManager = GameManager.Instance;
-        if (gameManager != null)
-        {
-            playerData = gameManager.GetPlayerData();
-        }
-        
-        Debug.Log("KuKu收集系统初始化完成");
-    }
-    
     /// <summary>
-    /// 添加KuKu到收藏
+    /// KuKu收集系统 - 管理KuKu图鉴数据库（游戏外）
     /// </summary>
-    public bool AddKukuToCollection(MythicalKukuData kuku)
+    public class KukuCollectionSystem
     {
-        if (playerData == null)
+        // 单例实例
+        public static KukuCollectionSystem Instance { get; private set; }
+        
+        // KuKu数据库
+        private Dictionary<int, KukuData> allKukuDatabase;
+        private Dictionary<int, MythicalKukuData> allMythicalKukuDatabase;
+        
+        // 当前页面索引
+        private int currentPageIndex;
+        private const int KUKUS_PER_PAGE = 12;
+        
+        // 事件系统
+        public event Action<KukuData> OnKukuUnlocked;                        // KuKu解锁事件
+        public event Action<MythicalKukuData> OnMythicalKukuUnlocked;        // 神话KuKu解锁事件
+        public event Action<int, float> OnPageCompleted;                     // 页面完成事件
+        public event Action OnCollectionUpdated;                             // 收集更新事件
+        
+        // 构造函数
+        public KukuCollectionSystem()
         {
-            Debug.LogError("玩家数据未加载");
-            return false;
-        }
-        
-        if (playerData.CollectedKukus.Count >= maxCollectionSlots)
-        {
-            Debug.LogError("收藏槽位已满");
-            return false;
-        }
-        
-        // 检查是否已存在
-        if (playerData.HasKuku(kuku.Id))
-        {
-            Debug.LogWarning($"KuKu已存在于收藏中: {kuku.Name}");
-            return false;
-        }
-        
-        playerData.AddKuku(kuku);
-        
-        Debug.Log($"添加KuKu到收藏: {kuku.Name}");
-        
-        // 触发事件
-        OnKukuAddedToCollection?.Invoke(kuku);
-        
-        return true;
-    }
-    
-    /// <summary>
-    /// 从收藏中移除KuKu
-    /// </summary>
-    public bool RemoveKukuFromCollection(int kukuId)
-    {
-        if (playerData == null)
-        {
-            Debug.LogError("玩家数据未加载");
-            return false;
-        }
-        
-        if (!playerData.HasKuku(kukuId))
-        {
-            Debug.LogError($"收藏中不存在该KuKu: {kukuId}");
-            return false;
-        }
-        
-        // 如果在收藏夹中，先移除
-        if (favoriteKukuIds.Contains(kukuId))
-        {
-            RemoveFromFavorites(kukuId);
-        }
-        
-        var kuku = playerData.GetKukuById(kukuId);
-        playerData.RemoveKuku(kukuId);
-        
-        Debug.Log($"从收藏中移除KuKu: {kuku?.Name ?? "Unknown"} (ID: {kukuId})");
-        
-        // 触发事件
-        OnKukuRemovedFromCollection?.Invoke(kukuId);
-        
-        return true;
-    }
-    
-    /// <summary>
-    /// 添加到收藏夹
-    /// </summary>
-    public bool AddToFavorites(int kukuId)
-    {
-        if (favoriteKukuIds.Contains(kukuId))
-        {
-            Debug.LogWarning($"KuKu已在收藏夹中: {kukuId}");
-            return false;
-        }
-        
-        if (favoriteKukuIds.Count >= maxFavorites)
-        {
-            Debug.LogError("收藏夹已满");
-            return false;
-        }
-        
-        if (!playerData.HasKuku(kukuId))
-        {
-            Debug.LogError($"收藏中不存在该KuKu: {kukuId}");
-            return false;
-        }
-        
-        favoriteKukuIds.Add(kukuId);
-        
-        Debug.Log($"添加KuKu到收藏夹: {kukuId}");
-        
-        // 触发事件
-        OnKukuAddedToFavorites?.Invoke(kukuId);
-        
-        return true;
-    }
-    
-    /// <summary>
-    /// 从收藏夹移除
-    /// </summary>
-    public bool RemoveFromFavorites(int kukuId)
-    {
-        if (!favoriteKukuIds.Contains(kukuId))
-        {
-            Debug.LogWarning($"KuKu不在收藏夹中: {kukuId}");
-            return false;
-        }
-        
-        favoriteKukuIds.Remove(kukuId);
-        
-        Debug.Log($"从收藏夹移除KuKu: {kukuId}");
-        
-        // 触发事件
-        OnKukuRemovedFromFavorites?.Invoke(kukuId);
-        
-        return true;
-    }
-    
-    /// <summary>
-    /// 获取收藏的KuKu
-    /// </summary>
-    public List<MythicalKukuData> GetCollection()
-    {
-        if (playerData == null) return new List<MythicalKukuData>();
-        return new List<MythicalKukuData>(playerData.CollectedKukus);
-    }
-    
-    /// <summary>
-    /// 获取收藏夹中的KuKu
-    /// </summary>
-    public List<MythicalKukuData> GetFavorites()
-    {
-        if (playerData == null) return new List<MythicalKukuData>();
-        
-        List<MythicalKukuData> favorites = new List<MythicalKukuData>();
-        
-        foreach (int kukuId in favoriteKukuIds)
-        {
-            var kuku = playerData.GetKukuById(kukuId);
-            if (kuku != null)
+            if (Instance == null)
             {
-                favorites.Add(kuku);
+                Instance = this;
+                InitializeKukuDatabase();
             }
         }
         
-        return favorites;
-    }
-    
-    /// <summary>
-    /// 按稀有度筛选KuKu
-    /// </summary>
-    public List<MythicalKukuData> GetKukusByRarity(MythicalKukuData.MythicalRarity rarity)
-    {
-        if (playerData == null) return new List<MythicalKukuData>();
-        return playerData.GetKukusByRarity(rarity);
-    }
-    
-    /// <summary>
-    /// 按类型筛选KuKu
-    /// </summary>
-    public List<MythicalKukuData> GetKukusByType(KukuType kukuType)
-    {
-        if (playerData == null) return new List<MythicalKukuData>();
-        
-        List<MythicalKukuData> filtered = new List<MythicalKukuData>();
-        
-        foreach (var kuku in playerData.CollectedKukus)
+        /// <summary>
+        /// 初始化KuKu数据库
+        /// </summary>
+        private void InitializeKukuDatabase()
         {
-            if (GetKukuType(kuku) == kukuType)
+            allKukuDatabase = new Dictionary<int, KukuData>();
+            allMythicalKukuDatabase = new Dictionary<int, MythicalKukuData>();
+            
+            // 生成基础KuKu数据
+            GenerateBasicKukus();
+            
+            // 生成神话KuKu数据
+            GenerateMythicalKukus();
+            
+            Debug.Log($"KuKu收集系统初始化完成 - 基础KuKu: {allKukuDatabase.Count}, 神话KuKu: {allMythicalKukuDatabase.Count}");
+        }
+        
+        /// <summary>
+        /// 生成基础KuKu数据
+        /// </summary>
+        private void GenerateBasicKukus()
+        {
+            string[] names = {
+                "森林小精灵", "山川守护者", "湖泊仙子", "天空使者", "海洋歌者",
+                "沙漠行者", "雪峰圣兽", "草原飞鹰", "洞穴智者", "遗迹守卫",
+                "晨曦使者", "暮光精灵", "星辰骑士", "月影法师", "日耀战士"
+            };
+            
+            string[] descriptions = {
+                "栖息在森林深处的神秘生物", "守护山川河流的古老存在", "在湖泊中嬉戏的水之精灵",
+                "翱翔于天空的自由使者", "在深海歌唱的神秘歌者", "穿越沙漠的坚韧旅者",
+                "栖息雪峰的圣洁生物", "草原上飞翔的天空猎手", "洞穴中蕴含智慧的存在",
+                "古老遗迹的忠诚守护者", "迎接晨曦的第一缕光芒", "在暮光中起舞的精灵",
+                "星辰指引的勇敢骑士", "月影下的神秘法师", "太阳照耀的勇猛战士"
+            };
+            
+            for (int i = 1; i <= 15; i++)
             {
-                filtered.Add(kuku);
-            }
-        }
-        
-        return filtered;
-    }
-    
-    /// <summary>
-    /// 获取KuKu类型
-    /// </summary>
-    public KukuType GetKukuType(MythicalKukuData kuku)
-    {
-        // 根据属性判断KuKu类型
-        if (kuku.DivinePower > kuku.AttackPower && kuku.DivinePower > kuku.DefensePower)
-        {
-            return KukuType.Magic;
-        }
-        else if (kuku.AttackPower > kuku.DefensePower)
-        {
-            return KukuType.Attack;
-        }
-        else if (kuku.DefensePower > kuku.AttackPower)
-        {
-            return KukuType.Defense;
-        }
-        else if (kuku.Speed > 2f)
-        {
-            return KukuType.Speed;
-        }
-        else
-        {
-            return KukuType.Balanced;
-        }
-    }
-    
-    /// <summary>
-    /// 搜索KuKu
-    /// </summary>
-    public List<MythicalKukuData> SearchKukus(string searchTerm)
-    {
-        if (playerData == null) return new List<MythicalKukuData>();
-        
-        List<MythicalKukuData> results = new List<MythicalKukuData>();
-        
-        foreach (var kuku in playerData.CollectedKukus)
-        {
-            if (kuku.Name.ToLower().Contains(searchTerm.ToLower()) ||
-                kuku.Description.ToLower().Contains(searchTerm.ToLower()))
-            {
-                results.Add(kuku);
-            }
-        }
-        
-        return results;
-    }
-    
-    /// <summary>
-    /// 排序KuKu
-    /// </summary>
-    public List<MythicalKukuData> SortKukus(KukuSortCriteria criteria, bool ascending = true)
-    {
-        var collection = GetCollection();
-        
-        switch (criteria)
-        {
-            case KukuSortCriteria.Name:
-                collection.Sort((x, y) => ascending ? 
-                    string.Compare(x.Name, y.Name) : 
-                    string.Compare(y.Name, x.Name));
-                break;
+                KukuData kuku = new KukuData
+                {
+                    Id = i,
+                    Name = names[i - 1],
+                    Description = descriptions[i - 1],
+                    Rarity = (KukuData.RarityType)(i % 5), // 循环分配稀有度
+                    AttackPower = 10f + i * 2f,
+                    DefensePower = 5f + i * 1.5f,
+                    Speed = 1f + i * 0.2f,
+                    Health = 50f + i * 5f,
+                    SkillName = $"技能{i}",
+                    SkillDamage = 5f + i,
+                    CaptureDifficulty = 1.0f - (i * 0.03f),
+                    CanAbsorbSoul = i > 5, // 等级较高的KuKu可以吸收灵魂
+                    SoulAbsorptionRate = i * 0.1f
+                };
                 
-            case KukuSortCriteria.Rarity:
-                collection.Sort((x, y) => ascending ? 
-                    ((int)x.Rarity).CompareTo((int)y.Rarity) : 
-                    ((int)y.Rarity).CompareTo((int)x.Rarity));
-                break;
-                
-            case KukuSortCriteria.Level:
-                collection.Sort((x, y) => ascending ? 
-                    x.Level.CompareTo(y.Level) : 
-                    y.Level.CompareTo(x.Level));
-                break;
-                
-            case KukuSortCriteria.Power:
-                collection.Sort((x, y) => ascending ? 
-                    x.GetTotalPower().CompareTo(y.GetTotalPower()) : 
-                    y.GetTotalPower().CompareTo(x.GetTotalPower()));
-                break;
-                
-            case KukuSortCriteria.CombatEffectiveness:
-                collection.Sort((x, y) => ascending ? 
-                    x.GetCombatEffectiveness().CompareTo(y.GetCombatEffectiveness()) : 
-                    y.GetCombatEffectiveness().CompareTo(x.GetCombatEffectiveness()));
-                break;
-                
-            case KukuSortCriteria.AcquisitionDate:
-                // 如果有获取日期信息，可以按日期排序
-                // 这里简化处理
-                break;
-        }
-        
-        return collection;
-    }
-    
-    /// <summary>
-    /// 获取收藏统计信息
-    /// </summary>
-    public CollectionStats GetCollectionStats()
-    {
-        if (playerData == null) return new CollectionStats();
-        
-        var stats = new CollectionStats();
-        stats.TotalCount = playerData.GetTotalKukuCount();
-        stats.MaxSlots = maxCollectionSlots;
-        
-        stats.CelestialCount = playerData.GetCommonKukuCount();
-        stats.ImmortalCount = playerData.GetRareKukuCount();
-        stats.DivineBeastCount = playerData.GetEpicKukuCount();
-        stats.SacredCount = playerData.GetLegendaryKukuCount();
-        stats.PrimordialCount = playerData.GetMythicKukuCount();
-        
-        stats.FavoriteCount = favoriteKukuIds.Count;
-        stats.MaxFavorites = maxFavorites;
-        
-        stats.TotalPower = playerData.GetTotalKukuPower();
-        stats.AverageLevel = playerData.GetAverageKukuLevel();
-        
-        return stats;
-    }
-    
-    /// <summary>
-    /// 获取最强的KuKu
-    /// </summary>
-    public MythicalKukuData GetStrongestKuku()
-    {
-        if (playerData == null || playerData.CollectedKukus.Count == 0) return null;
-        
-        MythicalKukuData strongest = playerData.CollectedKukus[0];
-        foreach (var kuku in playerData.CollectedKukus)
-        {
-            if (kuku.GetTotalPower() > strongest.GetTotalPower())
-            {
-                strongest = kuku;
+                allKukuDatabase[i] = kuku;
             }
         }
         
-        return strongest;
-    }
-    
-    /// <summary>
-    /// 获取最高等级的KuKu
-    /// </summary>
-    public MythicalKukuData GetHighestLevelKuku()
-    {
-        if (playerData == null || playerData.CollectedKukus.Count == 0) return null;
-        
-        MythicalKukuData highestLevel = playerData.CollectedKukus[0];
-        foreach (var kuku in playerData.CollectedKukus)
+        /// <summary>
+        /// 生成神话KuKu数据
+        /// </summary>
+        private void GenerateMythicalKukus()
         {
-            if (kuku.Level > highestLevel.Level)
+            string[] names = {
+                "青龙", "白虎", "朱雀", "玄武", "麒麟", "凤凰", "饕餮", "貔貅",
+                "应龙", "烛龙", "九尾狐", "毕方", "鲲鹏", "梼杌", "穷奇"
+            };
+            
+            string[] elements = { "风", "火", "水", "土", "雷", "光", "暗", "木", "冰", "毒" };
+            
+            for (int i = 1; i <= 15; i++)
             {
-                highestLevel = kuku;
+                MythicalKukuData kuku = new MythicalKukuData
+                {
+                    Id = 100 + i,
+                    Name = names[i - 1],
+                    Description = $"传说中的神话生物 - {names[i - 1]}",
+                    MythologicalBackground = "源自古代神话传说的神秘生物",
+                    Element = elements[i % elements.Length],
+                    SkillType = "Mythical",
+                    SkillDescription = $"强大的神话技能 - {names[i - 1]}之怒",
+                    SkillRange = 3f + i * 0.2f,
+                    SkillPower = 50f + i * 5f,
+                    AttackPower = 100f + i * 10f,
+                    DefensePower = 80f + i * 8f,
+                    Speed = 4f + i * 0.3f,
+                    Health = 500f + i * 50f,
+                    DivinePower = 50f + i * 5f,
+                    ProtectionPower = 30f + i * 3f,
+                    PurificationPower = 20f + i * 2f,
+                    Rarity = (MythicalKukuData.MythicalRarity)(i % 5), // 循环分配稀有度
+                    EvolutionLevel = 5, // 神话KuKu通常已达到进化顶峰
+                    EvolutionProgress = 100f,
+                    EvolutionStonesRequired = 50,
+                    CanAbsorbSoul = true,
+                    SoulAbsorptionRate = 1.0f + i * 0.1f,
+                    CanFuseWithRobots = i > 8, // 部分神话KuKu可以融合
+                    FusionCompatibility = 0.7f + (i % 3) * 0.1f,
+                    Level = 20 + i * 2,
+                    MaxEquipmentSlots = i > 10 ? 6 : 0, // 高级神话KuKu可装备
+                    SpriteName = $"Mythical_{names[i - 1]}"
+                };
+                
+                allMythicalKukuDatabase[100 + i] = kuku;
             }
         }
         
-        return highestLevel;
-    }
-    
-    /// <summary>
-    /// 获取指定稀有度的最高级KuKu
-    /// </summary>
-    public MythicalKukuData GetHighestLevelKukuByRarity(MythicalKukuData.MythicalRarity rarity)
-    {
-        if (playerData == null) return null;
-        
-        var kukus = playerData.GetKukusByRarity(rarity);
-        if (kukus.Count == 0) return null;
-        
-        MythicalKukuData highestLevel = kukus[0];
-        foreach (var kuku in kukus)
+        /// <summary>
+        /// 获取指定ID的基础KuKu数据
+        /// </summary>
+        public KukuData GetKukuTemplate(int kukuId)
         {
-            if (kuku.Level > highestLevel.Level)
+            if (allKukuDatabase.ContainsKey(kukuId))
             {
-                highestLevel = kuku;
+                return allKukuDatabase[kukuId].Clone();
+            }
+            return null;
+        }
+        
+        /// <summary>
+        /// 获取指定ID的神话KuKu数据
+        /// </summary>
+        public MythicalKukuData GetMythicalKukuTemplate(int kukuId)
+        {
+            if (allMythicalKukuDatabase.ContainsKey(kukuId))
+            {
+                return allMythicalKukuDatabase[kukuId].Clone();
+            }
+            return null;
+        }
+        
+        /// <summary>
+        /// 解锁KuKu（由游戏内系统调用）
+        /// </summary>
+        public void UnlockKuku(int kukuId)
+        {
+            if (allKukuDatabase.ContainsKey(kukuId))
+            {
+                KukuData kuku = allKukuDatabase[kukuId];
+                OnKukuUnlocked?.Invoke(kuku);
+                OnCollectionUpdated?.Invoke();
+                
+                Debug.Log($"解锁了KuKu: {kuku.Name}");
+            }
+            else if (allMythicalKukuDatabase.ContainsKey(kukuId))
+            {
+                MythicalKukuData kuku = allMythicalKukuDatabase[kukuId];
+                OnMythicalKukuUnlocked?.Invoke(kuku);
+                OnCollectionUpdated?.Invoke();
+                
+                Debug.Log($"解锁了神话KuKu: {kuku.Name}");
             }
         }
         
-        return highestLevel;
-    }
-    
-    /// <summary>
-    /// 获取收藏百分比
-    /// </summary>
-    public float GetCollectionPercentage()
-    {
-        if (playerData == null) return 0f;
-        return (float)playerData.GetTotalKukuCount() / maxCollectionSlots * 100f;
-    }
-    
-    /// <summary>
-    /// 检查是否收集齐某稀有度的所有KuKu
-    /// </summary>
-    public bool HasCollectedAllOfRarity(MythicalKukuData.MythicalRarity rarity)
-    {
-        // 这需要知道每种稀有度应该有多少种KuKu
-        // 简化实现，返回false
-        return false;
-    }
-    
-    /// <summary>
-    /// 获取收藏成就
-    /// </summary>
-    public List<string> GetCollectionAchievements()
-    {
-        var achievements = new List<string>();
-        
-        if (playerData == null) return achievements;
-        
-        // 检查各种成就条件
-        if (playerData.GetTotalKukuCount() >= 10)
-            achievements.Add("新手收集家：收集10个KuKu");
-            
-        if (playerData.GetTotalKukuCount() >= 25)
-            achievements.Add("资深收集家：收集25个KuKu");
-            
-        if (playerData.GetTotalKukuCount() >= 50)
-            achievements.Add("大师收集家：收集全部KuKu");
-            
-        if (playerData.GetMythicKukuCount() > 0)
-            achievements.Add("神话猎人：获得首个神话KuKu");
-            
-        if (playerData.GetTotalKukuPower() >= 1000)
-            achievements.Add("强力战队：队伍总战力超过1000");
-            
-        return achievements;
-    }
-    
-    public enum KukuType
-    {
-        Attack,      // 攻击型
-        Defense,     // 防御型
-        Magic,       // 魔法型
-        Speed,       // 速度型
-        Balanced     // 平衡型
-    }
-    
-    public enum KukuSortCriteria
-    {
-        Name,                // 按名称
-        Rarity,              // 按稀有度
-        Level,               // 按等级
-        Power,               // 按总战力
-        CombatEffectiveness, // 按战斗效能
-        AcquisitionDate      // 按获取日期
-    }
-    
-    [System.Serializable]
-    public class CollectionStats
-    {
-        public int TotalCount;
-        public int MaxSlots;
-        public int CelestialCount;
-        public int ImmortalCount;
-        public int DivineBeastCount;
-        public int SacredCount;
-        public int PrimordialCount;
-        public int FavoriteCount;
-        public int MaxFavorites;
-        public int TotalPower;
-        public float AverageLevel;
-        
-        public float GetRarityPercentage(MythicalKukuData.MythicalRarity rarity)
+        /// <summary>
+        /// 根据概率获取随机KuKu
+        /// </summary>
+        public KukuData GetRandomKukuByProbability()
         {
-            int count = 0;
-            switch (rarity)
+            // 根据稀有度权重随机选择
+            List<KukuData> eligibleKukus = new List<KukuData>();
+            
+            foreach (var kvp in allKukuDatabase)
             {
-                case MythicalKukuData.MythicalRarity.Celestial: count = CelestialCount; break;
-                case MythicalKukuData.MythicalRarity.Immortal: count = ImmortalCount; break;
-                case MythicalKukuData.MythicalRarity.DivineBeast: count = DivineBeastCount; break;
-                case MythicalKukuData.MythicalRarity.Sacred: count = SacredCount; break;
-                case MythicalKukuData.MythicalRarity.Primordial: count = PrimordialCount; break;
+                // 根据稀有度决定出现频率
+                int weight = 10 - (int)kvp.Value.Rarity; // 稀有度越低权重越高
+                for (int i = 0; i < weight; i++)
+                {
+                    eligibleKukus.Add(kvp.Value);
+                }
             }
             
-            return TotalCount > 0 ? (float)count / TotalCount * 100f : 0f;
+            if (eligibleKukus.Count > 0)
+            {
+                int randomIndex = UnityEngine.Random.Range(0, eligibleKukus.Count);
+                return eligibleKukus[randomIndex].Clone();
+            }
+            
+            return null;
         }
         
-        public float GetCollectionFillPercentage()
+        /// <summary>
+        /// 根据概率获取随机神话KuKu
+        /// </summary>
+        public MythicalKukuData GetRandomMythicalKukuByProbability()
         {
-            return MaxSlots > 0 ? (float)TotalCount / MaxSlots * 100f : 0f;
+            // 根据稀有度权重随机选择
+            List<MythicalKukuData> eligibleKukus = new List<MythicalKukuData>();
+            
+            foreach (var kvp in allMythicalKukuDatabase)
+            {
+                // 根据稀有度决定出现频率
+                int weight = 6 - (int)kvp.Value.Rarity; // 稀有度越低权重越高
+                for (int i = 0; i < weight; i++)
+                {
+                    eligibleKukus.Add(kvp.Value);
+                }
+            }
+            
+            if (eligibleKukus.Count > 0)
+            {
+                int randomIndex = UnityEngine.Random.Range(0, eligibleKukus.Count);
+                return eligibleKukus[randomIndex].Clone();
+            }
+            
+            return null;
         }
         
-        public float GetFavoriteFillPercentage()
+        /// <summary>
+        /// 获取当前页面的基础KuKu列表
+        /// </summary>
+        public List<KukuData> GetCurrentPageKukus()
         {
-            return MaxFavorites > 0 ? (float)FavoriteCount / MaxFavorites * 100f : 0f;
+            return GetPageKukus(currentPageIndex);
         }
-    }
-    
-    void OnDestroy()
-    {
-        Debug.Log("KuKu收集系统已销毁");
+        
+        /// <summary>
+        /// 获取指定页面的基础KuKu列表
+        /// </summary>
+        public List<KukuData> GetPageKukus(int pageIndex)
+        {
+            var allKukus = allKukuDatabase.Values.ToList();
+            int startIndex = pageIndex * KUKUS_PER_PAGE;
+            
+            if (startIndex >= allKukus.Count)
+            {
+                return new List<KukuData>(); // 返回空列表
+            }
+            
+            var pageKukus = new List<KukuData>();
+            
+            for (int i = startIndex; i < startIndex + KUKUS_PER_PAGE && i < allKukus.Count; i++)
+            {
+                pageKukus.Add(allKukus[i].Clone());
+            }
+            
+            return pageKukus;
+        }
+        
+        /// <summary>
+        /// 获取当前页面的神话KuKu列表
+        /// </summary>
+        public List<MythicalKukuData> GetCurrentPageMythicalKukus()
+        {
+            return GetPageMythicalKukus(currentPageIndex);
+        }
+        
+        /// <summary>
+        /// 获取指定页面的神话KuKu列表
+        /// </summary>
+        public List<MythicalKukuData> GetPageMythicalKukus(int pageIndex)
+        {
+            var allKukus = allMythicalKukuDatabase.Values.ToList();
+            int startIndex = pageIndex * KUKUS_PER_PAGE;
+            
+            if (startIndex >= allKukus.Count)
+            {
+                return new List<MythicalKukuData>(); // 返回空列表
+            }
+            
+            var pageKukus = new List<MythicalKukuData>();
+            
+            for (int i = startIndex; i < startIndex + KUKUS_PER_PAGE && i < allKukus.Count; i++)
+            {
+                pageKukus.Add(allKukus[i].Clone());
+            }
+            
+            return pageKukus;
+        }
+        
+        /// <summary>
+        /// 获取基础KuKu总页数
+        /// </summary>
+        public int GetTotalPages()
+        {
+            int totalKukus = allKukuDatabase.Count;
+            return Mathf.CeilToInt((float)totalKukus / KUKUS_PER_PAGE);
+        }
+        
+        /// <summary>
+        /// 获取神话KuKu总页数
+        /// </summary>
+        public int GetTotalMythicalPages()
+        {
+            int totalKukus = allMythicalKukuDatabase.Count;
+            return Mathf.CeilToInt((float)totalKukus / KUKUS_PER_PAGE);
+        }
+        
+        /// <summary>
+        /// 切换到指定页面
+        /// </summary>
+        public void SwitchToPage(int pageIndex)
+        {
+            int totalPages = GetTotalPages();
+            if (pageIndex >= 0 && pageIndex < totalPages)
+            {
+                currentPageIndex = pageIndex;
+            }
+        }
+        
+        /// <summary>
+        /// 下一页
+        /// </summary>
+        public void NextPage()
+        {
+            int totalPages = GetTotalPages();
+            if (currentPageIndex < totalPages - 1)
+            {
+                currentPageIndex++;
+            }
+        }
+        
+        /// <summary>
+        /// 上一页
+        /// </summary>
+        public void PreviousPage()
+        {
+            if (currentPageIndex > 0)
+            {
+                currentPageIndex--;
+            }
+        }
+        
+        /// <summary>
+        /// 获取当前页面索引
+        /// </summary>
+        public int GetCurrentPageIndex()
+        {
+            return currentPageIndex;
+        }
+        
+        /// <summary>
+        /// 获取基础KuKu收集进度
+        /// </summary>
+        public float GetCollectionProgress()
+        {
+            // 这里应该连接到玩家数据，但暂时返回模拟值
+            return (float)allKukuDatabase.Count / 100f; // 假设有100个KuKu
+        }
+        
+        /// <summary>
+        /// 获取指定稀有度的基础KuKu收集进度
+        /// </summary>
+        public float GetRarityCollectionProgress(KukuData.RarityType rarity)
+        {
+            int totalRarityKukus = allKukuDatabase.Values.Count(k => k.Rarity == rarity);
+            int collectedRarityKukus = allKukuDatabase.Values.Count(k => k.Rarity == rarity); // 模拟全部收集
+            
+            return totalRarityKukus > 0 ? (float)collectedRarityKukus / totalRarityKukus : 0f;
+        }
+        
+        /// <summary>
+        /// 获取指定稀有度的神话KuKu收集进度
+        /// </summary>
+        public float GetMythicalRarityCollectionProgress(MythicalKukuData.MythicalRarity rarity)
+        {
+            int totalRarityKukus = allMythicalKukuDatabase.Values.Count(k => k.Rarity == rarity);
+            int collectedRarityKukus = allMythicalKukuDatabase.Values.Count(k => k.Rarity == rarity); // 模拟全部收集
+            
+            return totalRarityKukus > 0 ? (float)collectedRarityKukus / totalRarityKukus : 0f;
+        }
+        
+        /// <summary>
+        /// 获取所有基础KuKu的数量
+        /// </summary>
+        public int GetTotalKukuCount()
+        {
+            return allKukuDatabase.Count;
+        }
+        
+        /// <summary>
+        /// 获取所有神话KuKu的数量
+        /// </summary>
+        public int GetTotalMythicalKukuCount()
+        {
+            return allMythicalKukuDatabase.Count;
+        }
+        
+        /// <summary>
+        /// 搜索KuKu
+        /// </summary>
+        public List<KukuData> SearchKukus(string searchTerm)
+        {
+            List<KukuData> results = new List<KukuData>();
+            
+            foreach (var kvp in allKukuDatabase)
+            {
+                if (kvp.Value.Name.ToLower().Contains(searchTerm.ToLower()) ||
+                    kvp.Value.Description.ToLower().Contains(searchTerm.ToLower()))
+                {
+                    results.Add(kvp.Value.Clone());
+                }
+            }
+            
+            return results;
+        }
+        
+        /// <summary>
+        /// 按稀有度筛选KuKu
+        /// </summary>
+        public List<KukuData> FilterKukusByRarity(KukuData.RarityType rarity)
+        {
+            List<KukuData> results = new List<KukuData>();
+            
+            foreach (var kvp in allKukuDatabase)
+            {
+                if (kvp.Value.Rarity == rarity)
+                {
+                    results.Add(kvp.Value.Clone());
+                }
+            }
+            
+            return results;
+        }
+        
+        /// <summary>
+        /// 按元素筛选神话KuKu
+        /// </summary>
+        public List<MythicalKukuData> FilterMythicalKukusByElement(string element)
+        {
+            List<MythicalKukuData> results = new List<MythicalKukuData>();
+            
+            foreach (var kvp in allMythicalKukuDatabase)
+            {
+                if (kvp.Value.Element.ToLower().Contains(element.ToLower()))
+                {
+                    results.Add(kvp.Value.Clone());
+                }
+            }
+            
+            return results;
+        }
+        
+        /// <summary>
+        /// 获取KuKu统计信息
+        /// </summary>
+        public Dictionary<KukuData.RarityType, int> GetKukuStatistics()
+        {
+            Dictionary<KukuData.RarityType, int> stats = new Dictionary<KukuData.RarityType, int>();
+            
+            foreach (KukuData.RarityType rarity in Enum.GetValues(typeof(KukuData.RarityType)))
+            {
+                stats[rarity] = allKukuDatabase.Values.Count(k => k.Rarity == rarity);
+            }
+            
+            return stats;
+        }
+        
+        /// <summary>
+        /// 获取神话KuKu统计信息
+        /// </summary>
+        public Dictionary<MythicalKukuData.MythicalRarity, int> GetMythicalKukuStatistics()
+        {
+            Dictionary<MythicalKukuData.MythicalRarity, int> stats = new Dictionary<MythicalKukuData.MythicalRarity, int>();
+            
+            foreach (MythicalKukuData.MythicalRarity rarity in Enum.GetValues(typeof(MythicalKukuData.MythicalRarity)))
+            {
+                stats[rarity] = allMythicalKukuDatabase.Values.Count(k => k.Rarity == rarity);
+            }
+            
+            return stats;
+        }
+        
+        /// <summary>
+        /// 重置系统
+        /// </summary>
+        public void Reset()
+        {
+            allKukuDatabase.Clear();
+            allMythicalKukuDatabase.Clear();
+            currentPageIndex = 0;
+            
+            InitializeKukuDatabase();
+        }
     }
 }

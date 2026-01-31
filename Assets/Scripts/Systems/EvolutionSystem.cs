@@ -1,268 +1,471 @@
+using System;
 using UnityEngine;
-using System.Collections.Generic;
+using KukuWorld.Data;
 
-public class EvolutionSystem : MonoBehaviour
+namespace KukuWorld.Systems
 {
-    [Header("进化设置")]
-    public float baseSoulRequirement = 10f;
-    public float rarityMultiplier = 2f;
-    public float levelMultiplier = 1.1f;
-    
-    private GameManager gameManager;
-    private PlayerData playerData;
-    
-    // 事件
-    public System.Action<MythicalKukuData> OnKukuEvolved;
-    public System.Action<string> OnEvolutionFailed;
-    
-    void Start()
-    {
-        Initialize();
-    }
-    
-    public void Initialize()
-    {
-        gameManager = GameManager.Instance;
-        if (gameManager != null)
-        {
-            playerData = gameManager.GetPlayerData();
-        }
-        
-        Debug.Log("进化系统初始化完成");
-    }
-    
     /// <summary>
-    /// 尝试进化指定的KuKu
+    /// 进化系统 - 处理KuKu进化逻辑
     /// </summary>
-    /// <param name="kukuId">要进化的KuKu ID</param>
-    /// <returns>进化结果</returns>
-    public EvolutionResult AttemptEvolution(int kukuId)
+    public static class EvolutionSystem
     {
-        if (playerData == null)
+        /// <summary>
+        /// 进化结果结构
+        /// </summary>
+        public struct EvolutionResult
         {
-            return new EvolutionResult(false, null, "玩家数据未加载");
+            public bool success;
+            public MythicalKukuData evolvedKuku;
+            public string message;
+            public bool isFinalEvolution;     // 是否达到最终进化等级（可融合）
+
+            public EvolutionResult(bool isSuccess, MythicalKukuData kuku, string msg, bool isFinal = false)
+            {
+                success = isSuccess;
+                evolvedKuku = kuku;
+                message = msg;
+                isFinalEvolution = isFinal;
+            }
         }
-        
-        // 查找KuKu
-        MythicalKukuData kuku = playerData.GetKukuById(kukuId);
-        if (kuku == null)
+
+        /// <summary>
+        /// 灵魂类型枚举
+        /// </summary>
+        public enum SoulType 
+        { 
+            Common,           // 普通灵魂
+            Rare,             // 稀有灵魂
+            Epic,             // 史诗灵魂
+            Legendary,        // 传说灵魂
+            Mythic,           // 神话灵魂
+            Divine,           // 神圣灵魂
+            SoulShard,        // 灵魂碎片（合成材料）
+            DivineEssence     // 神圣精华（高级合成材料）
+        }
+
+        /// <summary>
+        /// 尝试进化KuKu
+        /// </summary>
+        public static EvolutionResult EvolveKuku(MythicalKukuData kuku)
         {
-            return new EvolutionResult(false, null, "未找到指定的KuKu");
+            if (kuku == null)
+            {
+                return new EvolutionResult(false, null, "KuKu数据无效");
+            }
+
+            // 检查是否可以进化
+            if (kuku.EvolutionLevel >= 5) // 假设最高进化等级为5
+            {
+                return new EvolutionResult(false, kuku, "KuKu已达到最高进化等级", true);
+            }
+
+            // 检查是否有足够的进化石
+            if (kuku.EvolutionStonesRequired > 0)
+            {
+                // 这里需要连接到玩家数据来检查是否拥有足够的进化石
+                // 暂时假设玩家有足够的进化石
+            }
+
+            // 计算进化成功率
+            float successRate = GetEvolutionSuccessRate(kuku);
+
+            if (UnityEngine.Random.value <= successRate)
+            {
+                // 进化成功
+                MythicalKukuData evolvedKuku = PerformEvolution(kuku);
+
+                string message = $"进化成功！{kuku.Name} 进化为 {evolvedKuku.Name}！";
+                bool isFinal = evolvedKuku.EvolutionLevel >= 5;
+
+                return new EvolutionResult(true, evolvedKuku, message, isFinal);
+            }
+            else
+            {
+                // 进化失败，但不会失去KuKu，只会消耗进化材料
+                return new EvolutionResult(false, kuku, "进化失败，进化材料被消耗");
+            }
         }
-        
-        // 检查是否满足进化条件
-        float soulRequirement = CalculateSoulRequirement(kuku);
-        if (playerData.Souls < soulRequirement)
+
+        /// <summary>
+        /// 通过吸收灵魂进化KuKu
+        /// </summary>
+        public static EvolutionResult EvolveKukuWithSoul(MythicalKukuData kuku, float soulPower, SoulType soulType)
         {
-            return new EvolutionResult(false, null, $"灵魂不足，需要 {soulRequirement:F1} 灵魂，当前 {playerData.Souls:F1}");
+            if (kuku == null)
+            {
+                return new EvolutionResult(false, null, "KuKu数据无效");
+            }
+
+            if (!kuku.CanAbsorbSoul)
+            {
+                return new EvolutionResult(false, kuku, "该KuKu无法吸收灵魂");
+            }
+
+            // 计算灵魂的有效性
+            float effectiveSoulPower = CalculateSoulEffectiveness(kuku, soulPower, soulType);
+
+            // 检查是否积累了足够的灵魂来进化
+            if (effectiveSoulPower < GetSoulRequirementForNextEvolution(kuku))
+            {
+                // 灵魂不足，但可以增加进化进度
+                float progress = effectiveSoulPower / GetSoulRequirementForNextEvolution(kuku);
+                kuku.EvolutionProgress += progress;
+
+                if (kuku.EvolutionProgress >= 1.0f)
+                {
+                    // 进化进度满了，执行进化
+                    kuku.EvolutionProgress = 0f;
+                    MythicalKukuData evolvedKuku = PerformEvolution(kuku);
+                    
+                    string message = $"灵魂积累完成！{kuku.Name} 进化为 {evolvedKuku.Name}！";
+                    bool isFinal = evolvedKuku.EvolutionLevel >= 5;
+
+                    return new EvolutionResult(true, evolvedKuku, message, isFinal);
+                }
+                else
+                {
+                    string message = $"灵魂吸收成功！进化进度: {(kuku.EvolutionProgress * 100):F1}%";
+                    return new EvolutionResult(true, kuku, message);
+                }
+            }
+            else
+            {
+                // 灵魂充足，直接进化
+                MythicalKukuData evolvedKuku = PerformEvolution(kuku);
+                
+                string message = $"灵魂进化成功！{kuku.Name} 进化为 {evolvedKuku.Name}！";
+                bool isFinal = evolvedKuku.EvolutionLevel >= 5;
+
+                return new EvolutionResult(true, evolvedKuku, message, isFinal);
+            }
         }
-        
-        // 检查等级要求
-        if (kuku.Level < 10) // 假设需要达到10级才能进化
+
+        /// <summary>
+        /// 获取进化成功率
+        /// </summary>
+        public static float GetEvolutionSuccessRate(MythicalKukuData kuku)
         {
-            return new EvolutionResult(false, null, $"KuKu等级不足，需要达到10级才能进化，当前等级: {kuku.Level}");
+            if (kuku == null) return 0f;
+
+            // 基础成功率
+            float baseRate = 0.8f; // 80%基础成功率
+
+            // 根据进化等级调整成功率（等级越高成功率越低）
+            float levelFactor = 1.0f - (kuku.EvolutionLevel - 1) * 0.15f; // 每级降低15%
+
+            // 根据稀有度调整成功率
+            float rarityFactor = 1.0f - ((int)kuku.Rarity * 0.05f); // 稀有度越高成功率越低
+
+            // 计算最终成功率
+            float finalRate = baseRate * levelFactor * rarityFactor;
+
+            return Mathf.Clamp01(finalRate);
         }
-        
-        // 执行进化
-        MythicalKukuData evolvedKuku = EvolveKuku(kuku);
-        
-        // 消耗灵魂
-        playerData.SpendSouls(soulRequirement);
-        
-        // 替换原KuKu
-        playerData.RemoveKuku(kukuId);
-        playerData.AddKuku(evolvedKuku);
-        
-        // 触发进化成功事件
-        OnKukuEvolved?.Invoke(evolvedKuku);
-        
-        return new EvolutionResult(true, evolvedKuku, $"成功进化 {evolvedKuku.Name}！");
-    }
-    
-    /// <summary>
-    /// 计算进化所需灵魂数量
-    /// </summary>
-    /// <param name="kuku">要进化的KuKu</param>
-    /// <returns>所需灵魂数量</returns>
-    public float CalculateSoulRequirement(MythicalKukuData kuku)
-    {
-        float requirement = baseSoulRequirement;
-        
-        // 根据稀有度增加需求
-        requirement *= Mathf.Pow(rarityMultiplier, (int)kuku.Rarity);
-        
-        // 根据等级增加需求
-        requirement *= Mathf.Pow(levelMultiplier, kuku.Level / 10f);
-        
-        return requirement;
-    }
-    
-    /// <summary>
-    /// 执行KuKu进化
-    /// </summary>
-    /// <param name="originalKuku">原始KuKu</param>
-    /// <returns>进化后的KuKu</returns>
-    MythicalKukuData EvolveKuku(MythicalKukuData originalKuku)
-    {
-        MythicalKukuData evolvedKuku = originalKuku.Clone();
-        
-        // 提升稀有度（如果还不是最高稀有度）
-        if ((int)evolvedKuku.Rarity < 4) // 不是最高稀有度
+
+        /// <summary>
+        /// 获取进化预览
+        /// </summary>
+        public static MythicalKukuData GetEvolutionPreview(MythicalKukuData kuku)
         {
-            evolvedKuku.Rarity = (MythicalKukuData.MythicalRarity)((int)evolvedKuku.Rarity + 1);
+            if (kuku == null) return null;
+
+            // 创建当前KuKu的副本并模拟进化
+            MythicalKukuData preview = kuku.Clone();
+            
+            // 应用进化属性提升
+            preview.EvolutionLevel++;
+            preview.AttackPower *= 1.3f;
+            preview.DefensePower *= 1.25f;
+            preview.Health *= 1.3f;
+            preview.Speed *= 1.1f;
+            preview.DivinePower *= 1.2f;
+            preview.ProtectionPower *= 1.2f;
+            preview.PurificationPower *= 1.2f;
+
+            return preview;
         }
-        
-        // 大幅提升所有属性
-        evolvedKuku.AttackPower *= 2.0f;
-        evolvedKuku.DefensePower *= 2.0f;
-        evolvedKuku.Health *= 2.0f;
-        evolvedKuku.DivinePower *= 2.0f;
-        evolvedKuku.ProtectionPower *= 2.0f;
-        evolvedKuku.PurificationPower *= 2.0f;
-        
-        // 提升技能伤害
-        evolvedKuku.SkillDamage *= 1.8f;
-        
-        // 重置等级为1（进化后重新开始成长）
-        evolvedKuku.Level = 1;
-        evolvedKuku.Experience = 0;
-        
-        // 增加名字前缀表示进化
-        evolvedKuku.Name = $"进化-{evolvedKuku.Name}";
-        
-        Debug.Log($"KuKu {originalKuku.Name} 进化为 {evolvedKuku.Name}");
-        
-        return evolvedKuku;
-    }
-    
-    /// <summary>
-    /// 吸收灵魂（非进化方式提升KuKu）
-    /// </summary>
-    /// <param name="kukuId">KuKu ID</param>
-    /// <param name="soulAmount">吸收的灵魂数量</param>
-    /// <returns>吸收结果</returns>
-    public SoulAbsorptionResult AbsorbSouls(int kukuId, float soulAmount)
-    {
-        if (playerData == null)
+
+        /// <summary>
+        /// 计算灵魂吸收效果
+        /// </summary>
+        public static float CalculateSoulEffectiveness(MythicalKukuData kuku, float soulPower, SoulType soulType)
         {
-            return new SoulAbsorptionResult(false, 0f, "玩家数据未加载", 0f);
+            if (kuku == null) return 0f;
+
+            // 基础效率
+            float effectiveness = soulPower;
+
+            // 根据灵魂类型调整效率
+            switch (soulType)
+            {
+                case SoulType.Common:
+                    effectiveness *= 1.0f;
+                    break;
+                case SoulType.Rare:
+                    effectiveness *= 1.5f;
+                    break;
+                case SoulType.Epic:
+                    effectiveness *= 2.0f;
+                    break;
+                case SoulType.Legendary:
+                    effectiveness *= 3.0f;
+                    break;
+                case SoulType.Mythic:
+                    effectiveness *= 4.0f;
+                    break;
+                case SoulType.Divine:
+                    effectiveness *= 5.0f;
+                    break;
+                case SoulType.SoulShard:
+                    effectiveness *= 0.3f; // 碎片效率较低
+                    break;
+                case SoulType.DivineEssence:
+                    effectiveness *= 4.5f; // 精华效率很高
+                    break;
+            }
+
+            // 根据KuKu的吸收率调整
+            effectiveness *= kuku.SoulAbsorptionRate;
+
+            return effectiveness;
         }
-        
-        if (playerData.Souls < soulAmount)
+
+        /// <summary>
+        /// 灵魂合成系统
+        /// </summary>
+        public static float SynthesizeSouls(SoulType inputType, int quantity)
         {
-            return new SoulAbsorptionResult(false, 0f, $"灵魂不足，需要 {soulAmount:F1} 灵魂，当前 {playerData.Souls:F1}", 0f);
+            // 定义合成比率
+            float synthesisRate = 0f;
+
+            switch (inputType)
+            {
+                case SoulType.Common:
+                    synthesisRate = 0.5f; // 2个普通灵魂合成1个有效灵魂
+                    break;
+                case SoulType.SoulShard:
+                    synthesisRate = 0.3f; // 3个灵魂碎片合成1个普通灵魂
+                    break;
+                case SoulType.DivineEssence:
+                    synthesisRate = 3.0f; // 1个神圣精华等于3个神话灵魂
+                    break;
+                default:
+                    synthesisRate = 1.0f; // 其他类型按1:1计算
+                    break;
+            }
+
+            return quantity * synthesisRate;
         }
-        
-        MythicalKukuData kuku = playerData.GetKukuById(kukuId);
-        if (kuku == null)
+
+        /// <summary>
+        /// 转换灵魂类型
+        /// </summary>
+        public static float ConvertSouls(SoulType fromType, SoulType toType, float amount)
         {
-            return new SoulAbsorptionResult(false, 0f, "未找到指定的KuKu", 0f);
+            // 简化的转换逻辑
+            float conversionRate = GetConversionRate(fromType, toType);
+            return amount * conversionRate;
         }
-        
-        // 检查KuKu是否能吸收灵魂
-        if (!kuku.CanAbsorbSoul)
+
+        /// <summary>
+        /// 获取转换比率
+        /// </summary>
+        private static float GetConversionRate(SoulType fromType, SoulType toType)
         {
-            return new SoulAbsorptionResult(false, 0f, "此KuKu无法吸收灵魂", 0f);
+            if (fromType == toType) return 1.0f;
+
+            // 定义转换表
+            var conversionMatrix = new System.Collections.Generic.Dictionary<(SoulType, SoulType), float>
+            {
+                // 从低级到高级的转换（需要更多材料）
+                { (SoulType.Common, SoulType.Rare), 0.5f },
+                { (SoulType.Common, SoulType.Epic), 0.2f },
+                { (SoulType.Common, SoulType.Legendary), 0.1f },
+                { (SoulType.Common, SoulType.Mythic), 0.05f },
+                
+                { (SoulType.Rare, SoulType.Epic), 0.6f },
+                { (SoulType.Rare, SoulType.Legendary), 0.25f },
+                { (SoulType.Rare, SoulType.Mythic), 0.1f },
+                
+                { (SoulType.Epic, SoulType.Legendary), 0.7f },
+                { (SoulType.Epic, SoulType.Mythic), 0.3f },
+                
+                { (SoulType.Legendary, SoulType.Mythic), 0.8f },
+                
+                // 从高级到低级的转换（会有损失）
+                { (SoulType.Rare, SoulType.Common), 2.0f },
+                { (SoulType.Epic, SoulType.Common), 5.0f },
+                { (SoulType.Epic, SoulType.Rare), 3.0f },
+                { (SoulType.Legendary, SoulType.Common), 15.0f },
+                { (SoulType.Legendary, SoulType.Rare), 7.0f },
+                { (SoulType.Legendary, SoulType.Epic), 2.5f },
+                { (SoulType.Mythic, SoulType.Common), 40.0f },
+                { (SoulType.Mythic, SoulType.Rare), 20.0f },
+                { (SoulType.Mythic, SoulType.Epic), 10.0f },
+                { (SoulType.Mythic, SoulType.Legendary), 3.0f },
+                
+                // 灵魂碎片转换
+                { (SoulType.SoulShard, SoulType.Common), 0.3f },
+                { (SoulType.Common, SoulType.SoulShard), 3.0f },
+                
+                // 神圣精华转换
+                { (SoulType.DivineEssence, SoulType.Mythic), 2.0f },
+                { (SoulType.Mythic, SoulType.DivineEssence), 0.4f }
+            };
+
+            var key = (fromType, toType);
+            return conversionMatrix.ContainsKey(key) ? conversionMatrix[key] : 1.0f;
         }
-        
-        // 消耗灵魂
-        playerData.SpendSouls(soulAmount);
-        
-        // 计算属性提升
-        float powerIncrease = soulAmount * 0.1f; // 每点灵魂提供0.1的属性提升
-        
-        // 分配到各项属性
-        kuku.AttackPower += powerIncrease * 0.3f;  // 30%给攻击力
-        kuku.DefensePower += powerIncrease * 0.2f; // 20%给防御力
-        kuku.Health += powerIncrease * 0.25f;      // 25%给生命值
-        kuku.DivinePower += powerIncrease * 0.1f;  // 10%给神力
-        kuku.ProtectionPower += powerIncrease * 0.08f; // 8%给护体力量
-        kuku.PurificationPower += powerIncrease * 0.07f; // 7%给净化力量
-        
-        // 增加经验值
-        int expGain = Mathf.CeilToInt(soulAmount * 5f); // 每点灵魂提供5点经验
-        kuku.AddExperience(expGain);
-        
-        // 返回实际吸收的数量和效果
-        return new SoulAbsorptionResult(true, soulAmount, $"成功吸收 {soulAmount:F1} 灵魂", powerIncrease);
-    }
-    
-    /// <summary>
-    /// 获取进化信息
-    /// </summary>
-    /// <param name="kukuId">KuKu ID</param>
-    /// <returns>进化信息</returns>
-    public EvolutionInfo GetEvolutionInfo(int kukuId)
-    {
-        if (playerData == null)
+
+        /// <summary>
+        /// 检查KuKu是否已达到最终进化等级
+        /// </summary>
+        public static bool IsMaxEvolutionLevel(MythicalKukuData kuku)
         {
-            return new EvolutionInfo(false, 0f, 0, "玩家数据未加载");
+            if (kuku == null) return false;
+            return kuku.EvolutionLevel >= 5;
         }
-        
-        MythicalKukuData kuku = playerData.GetKukuById(kukuId);
-        if (kuku == null)
+
+        /// <summary>
+        /// 执行进化过程
+        /// </summary>
+        private static MythicalKukuData PerformEvolution(MythicalKukuData kuku)
         {
-            return new EvolutionInfo(false, 0f, 0, "未找到指定的KuKu");
+            MythicalKukuData evolvedKuku = kuku.Clone();
+
+            // 提升进化等级
+            evolvedKuku.EvolutionLevel++;
+
+            // 提升基础属性
+            evolvedKuku.AttackPower *= 1.3f;
+            evolvedKuku.DefensePower *= 1.25f;
+            evolvedKuku.Speed *= 1.1f;
+            evolvedKuku.Health *= 1.3f;
+
+            // 提升神话属性
+            evolvedKuku.DivinePower *= 1.2f;
+            evolvedKuku.ProtectionPower *= 1.2f;
+            evolvedKuku.PurificationPower *= 1.2f;
+
+            // 在第3级和第5级解锁新能力
+            if (evolvedKuku.EvolutionLevel == 3)
+            {
+                evolvedKuku.CanFuseWithRobots = true;
+                evolvedKuku.FusionCompatibility = 0.6f; // 初始融合兼容性
+            }
+            else if (evolvedKuku.EvolutionLevel == 5)
+            {
+                evolvedKuku.FusionCompatibility = 1.0f; // 最高融合兼容性
+                evolvedKuku.MaxEquipmentSlots = 6; // 解锁6个装备槽
+            }
+
+            // 根据进化等级调整稀有度（可能提升）
+            if (evolvedKuku.EvolutionLevel % 2 == 0 && evolvedKuku.Rarity < MythicalKukuData.MythicalRarity.Primordial)
+            {
+                evolvedKuku.Rarity = (MythicalKukuData.MythicalRarity)Mathf.Min((int)evolvedKuku.Rarity + 1, 4);
+            }
+
+            // 更新名称以反映进化等级
+            evolvedKuku.Name = GetEvolvedName(kuku.Name, evolvedKuku.EvolutionLevel);
+
+            return evolvedKuku;
         }
-        
-        float soulRequirement = CalculateSoulRequirement(kuku);
-        int levelRequirement = 10;
-        
-        return new EvolutionInfo(
-            kuku.Level >= levelRequirement && playerData.Souls >= soulRequirement,
-            soulRequirement,
-            levelRequirement,
-            $"进化需要: {soulRequirement:F1} 灵魂, 等级 {levelRequirement}+");
-    }
-    
-    public class EvolutionResult
-    {
-        public bool Success { get; set; }
-        public MythicalKukuData EvolvedKuku { get; set; }
-        public string Message { get; set; }
-        
-        public EvolutionResult(bool success, MythicalKukuData evolvedKuku, string message)
+
+        /// <summary>
+        /// 获取进化后的名称
+        /// </summary>
+        private static string GetEvolvedName(string originalName, int evolutionLevel)
         {
-            Success = success;
-            EvolvedKuku = evolvedKuku;
-            Message = message;
+            string prefix = "";
+            switch (evolutionLevel)
+            {
+                case 2:
+                    prefix = "进阶 ";
+                    break;
+                case 3:
+                    prefix = "高级 ";
+                    break;
+                case 4:
+                    prefix = "终极 ";
+                    break;
+                case 5:
+                    prefix = "传说 ";
+                    break;
+                default:
+                    prefix = "";
+                    break;
+            }
+
+            return prefix + originalName;
         }
-    }
-    
-    public class SoulAbsorptionResult
-    {
-        public bool Success { get; set; }
-        public float SoulUsed { get; set; }
-        public string Message { get; set; }
-        public float PowerIncrease { get; set; }
-        
-        public SoulAbsorptionResult(bool success, float soulUsed, string message, float powerIncrease)
+
+        /// <summary>
+        /// 获取下一级进化所需的灵魂量
+        /// </summary>
+        private static float GetSoulRequirementForNextEvolution(MythicalKukuData kuku)
         {
-            Success = success;
-            SoulUsed = soulUsed;
-            Message = message;
-            PowerIncrease = powerIncrease;
+            // 随着进化等级提升，所需灵魂量呈指数增长
+            return 50f * Mathf.Pow(2, kuku.EvolutionLevel - 1);
         }
-    }
-    
-    public class EvolutionInfo
-    {
-        public bool CanEvolve { get; set; }
-        public float SoulRequirement { get; set; }
-        public int LevelRequirement { get; set; }
-        public string InfoText { get; set; }
-        
-        public EvolutionInfo(bool canEvolve, float soulReq, int levelReq, string infoText)
+
+        /// <summary>
+        /// 获取进化所需材料
+        /// </summary>
+        public static (SoulType soulType, int quantity) GetEvolutionRequirements(MythicalKukuData kuku)
         {
-            CanEvolve = canEvolve;
-            SoulRequirement = soulReq;
-            LevelRequirement = levelReq;
-            InfoText = infoText;
+            if (kuku == null) return (SoulType.Common, 0);
+
+            // 根据进化等级确定所需灵魂类型和数量
+            SoulType soulType = SoulType.Common;
+            int quantity = 10;
+
+            if (kuku.EvolutionLevel >= 1)
+            {
+                soulType = SoulType.Rare;
+                quantity = 15;
+            }
+            if (kuku.EvolutionLevel >= 2)
+            {
+                soulType = SoulType.Epic;
+                quantity = 20;
+            }
+            if (kuku.EvolutionLevel >= 3)
+            {
+                soulType = SoulType.Legendary;
+                quantity = 25;
+            }
+            if (kuku.EvolutionLevel >= 4)
+            {
+                soulType = SoulType.Mythic;
+                quantity = 30;
+            }
+
+            return (soulType, quantity);
         }
-    }
-    
-    void OnDestroy()
-    {
-        Debug.Log("进化系统已销毁");
+
+        /// <summary>
+        /// 获取当前进化进度百分比
+        /// </summary>
+        public static float GetEvolutionProgressPercentage(MythicalKukuData kuku)
+        {
+            if (kuku == null) return 0f;
+
+            // 如果有进化进度值，则使用该值
+            if (kuku.EvolutionProgress > 0)
+            {
+                return Mathf.Clamp01(kuku.EvolutionProgress) * 100f;
+            }
+
+            // 否则基于进化等级估算进度
+            return (kuku.EvolutionLevel - 1) * 25f; // 每级25%进度
+        }
+
+        /// <summary>
+        /// 检查是否接近进化
+        /// </summary>
+        public static bool IsNearEvolution(MythicalKukuData kuku, float threshold = 0.8f)
+        {
+            return GetEvolutionProgressPercentage(kuku) / 100f >= threshold;
+        }
     }
 }

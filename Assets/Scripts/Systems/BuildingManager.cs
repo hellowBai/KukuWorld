@@ -1,651 +1,548 @@
-using UnityEngine;
-using System.Collections;
+using System;
 using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using KukuWorld.Data;
 
-public class BuildingManager : MonoBehaviour
+namespace KukuWorld.Systems
 {
-    [Header("建筑设置")]
-    public int maxBuildings = 20;
-    public Transform buildingParent;
-    
-    private GameManager gameManager;
-    private PlayerData playerData;
-    
-    // 当前建筑列表
-    private List<BuildingInstance> activeBuildings = new List<BuildingInstance>();
-    
-    // 生产队列
-    private Queue<ProductionOrder> productionQueue = new Queue<ProductionOrder>();
-    
-    // 事件
-    public System.Action<BuildingData> OnBuildingPlaced;
-    public System.Action<BuildingData> OnBuildingUpgraded;
-    public System.Action<BuildingData> OnBuildingDestroyed;
-    public System.Action<ProductionOrder> OnProductionStarted;
-    public System.Action<ProductionOrder> OnProductionCompleted;
-    
-    [System.Serializable]
-    public class BuildingInstance
-    {
-        public BuildingData data;
-        public Vector3 position;
-        public int level;
-        public float currentHealth;
-        public float buildProgress; // 建造进度 (0-1)
-        public float upgradeProgress; // 升级进度 (0-1)
-        public bool isBeingBuilt;
-        public bool isBeingUpgraded;
-        public float lastProductionTime;
-        public int productionQueueIndex;
-        
-        public BuildingInstance(BuildingData buildingData, Vector3 pos)
-        {
-            data = buildingData;
-            position = pos;
-            level = 1;
-            currentHealth = buildingData.MaxHealth;
-            buildProgress = 0f;
-            upgradeProgress = 0f;
-            isBeingBuilt = true;
-            isBeingUpgraded = false;
-            lastProductionTime = 0f;
-            productionQueueIndex = -1;
-        }
-    }
-    
-    [System.Serializable]
-    public class ProductionOrder
-    {
-        public BuildingInstance building;
-        public BuildingUpgradeType upgradeType;
-        public float startTime;
-        public float totalTime;
-        public System.Action onComplete;
-        
-        public ProductionOrder(BuildingInstance b, BuildingUpgradeType type, float duration, System.Action callback = null)
-        {
-            building = b;
-            upgradeType = type;
-            startTime = Time.time;
-            totalTime = duration;
-            onComplete = callback;
-        }
-        
-        public float GetProgress()
-        {
-            return Mathf.Clamp01((Time.time - startTime) / totalTime);
-        }
-        
-        public float GetRemainingTime()
-        {
-            return Mathf.Max(0f, totalTime - (Time.time - startTime));
-        }
-    }
-    
-    public enum BuildingUpgradeType
-    {
-        LevelUpgrade,     // 等级提升
-        AttributeBoost,   // 属性增强
-        NewAbility,       // 新能力
-        Efficiency,       // 效率提升
-        Capacity          // 容量提升
-    }
-    
-    void Start()
-    {
-        Initialize();
-    }
-    
-    public void Initialize()
-    {
-        gameManager = GameManager.Instance;
-        if (gameManager != null)
-        {
-            playerData = gameManager.GetPlayerData();
-        }
-        
-        Debug.Log("建筑管理系统初始化完成");
-    }
-    
     /// <summary>
-    /// 放置建筑
+    /// 建筑管理器 - 管理所有建筑实例，处理建筑建造和升级
     /// </summary>
-    public bool PlaceBuilding(BuildingType type, Vector3 position)
+    public class BuildingManager
     {
-        if (playerData == null)
+        // 建筑列表
+        private List<BuildingData> allBuildings;
+        private List<BuildingData> activeBuildings; // 当前活跃的建筑
+        
+        // 建筑限制
+        private int maxBuildings = 50; // 最大建筑数量
+        private Dictionary<BuildingData.BuildingType, int> buildingLimits; // 每种类型建筑的最大数量
+        
+        // 事件
+        public event Action<BuildingData> OnBuildingConstructed;
+        public event Action<BuildingData> OnBuildingUpgraded;
+        public event Action<BuildingData> OnBuildingDestroyed;
+        public event Action<BuildingData, float> OnBuildingHealthChanged;
+        public event Action<string> OnBuildingError;
+        
+        // 构造函数
+        public BuildingManager()
         {
-            Debug.LogError("玩家数据未加载");
-            return false;
-        }
-        
-        if (activeBuildings.Count >= maxBuildings)
-        {
-            Debug.LogError("已达建筑数量上限");
-            return false;
-        }
-        
-        // 检查是否有足够资源
-        BuildingData buildingData = CreateBuildingData(type);
-        if (playerData.Coins < buildingData.BuildCost)
-        {
-            Debug.LogError($"金币不足，需要 {buildingData.BuildCost} 金币，当前 {playerData.Coins}");
-            return false;
-        }
-        
-        // 扣除建造费用
-        playerData.SpendCoins(buildingData.BuildCost);
-        
-        // 创建建筑实例
-        BuildingInstance building = new BuildingInstance(buildingData, position);
-        activeBuildings.Add(building);
-        
-        Debug.Log($"在 {position} 放置了建筑: {buildingData.Name}");
-        
-        // 触发放置事件
-        OnBuildingPlaced?.Invoke(buildingData);
-        
-        return true;
-    }
-    
-    /// <summary>
-    /// 升级建筑
-    /// </summary>
-    public bool UpgradeBuilding(int buildingIndex, BuildingUpgradeType upgradeType)
-    {
-        if (buildingIndex < 0 || buildingIndex >= activeBuildings.Count)
-        {
-            Debug.LogError($"无效的建筑索引: {buildingIndex}");
-            return false;
-        }
-        
-        BuildingInstance building = activeBuildings[buildingIndex];
-        
-        if (building.isBeingUpgraded)
-        {
-            Debug.LogError($"建筑正在升级中: {building.data.Name}");
-            return false;
-        }
-        
-        // 计算升级成本
-        int upgradeCost = CalculateUpgradeCost(building, upgradeType);
-        if (playerData.Coins < upgradeCost)
-        {
-            Debug.LogError($"金币不足，需要 {upgradeCost} 金币，当前 {playerData.Coins}");
-            return false;
-        }
-        
-        // 检查升级前置条件
-        if (!CanUpgradeBuilding(building, upgradeType))
-        {
-            Debug.LogError($"无法升级建筑: {building.data.Name}");
-            return false;
-        }
-        
-        // 扣除升级费用
-        playerData.SpendCoins(upgradeCost);
-        
-        // 开始升级
-        float upgradeTime = CalculateUpgradeTime(building, upgradeType);
-        ProductionOrder order = new ProductionOrder(building, upgradeType, upgradeTime, () => OnUpgradeComplete(buildingIndex, upgradeType));
-        
-        building.isBeingUpgraded = true;
-        building.upgradeProgress = 0f;
-        productionQueue.Enqueue(order);
-        
-        Debug.Log($"开始升级建筑: {building.data.Name}, 类型: {upgradeType}, 时间: {upgradeTime:F1}s");
-        
-        // 触发生产开始事件
-        OnProductionStarted?.Invoke(order);
-        
-        return true;
-    }
-    
-    /// <summary>
-    /// 销毁建筑
-    /// </summary>
-    public bool DestroyBuilding(int buildingIndex)
-    {
-        if (buildingIndex < 0 || buildingIndex >= activeBuildings.Count)
-        {
-            Debug.LogError($"无效的建筑索引: {buildingIndex}");
-            return false;
-        }
-        
-        BuildingInstance building = activeBuildings[buildingIndex];
-        
-        // 计算返还资源
-        int refundAmount = Mathf.CeilToInt(building.data.BuildCost * 0.5f);
-        playerData.AddCoins(refundAmount);
-        
-        // 移除建筑
-        activeBuildings.RemoveAt(buildingIndex);
-        
-        Debug.Log($"销毁了建筑: {building.data.Name}，返还 {refundAmount} 金币");
-        
-        // 触发销毁事件
-        OnBuildingDestroyed?.Invoke(building.data);
-        
-        return true;
-    }
-    
-    /// <summary>
-    /// 获取指定类型的建筑
-    /// </summary>
-    public List<BuildingInstance> GetBuildingsByType(BuildingType type)
-    {
-        List<BuildingInstance> buildings = new List<BuildingInstance>();
-        
-        foreach (var building in activeBuildings)
-        {
-            if (building.data.Type == type)
-            {
-                buildings.Add(building);
-            }
-        }
-        
-        return buildings;
-    }
-    
-    /// <summary>
-    /// 获取所有建筑
-    /// </summary>
-    public List<BuildingInstance> GetAllBuildings()
-    {
-        return new List<BuildingInstance>(activeBuildings);
-    }
-    
-    /// <summary>
-    /// 更新建筑系统
-    /// </summary>
-    void Update()
-    {
-        UpdateProductionQueue();
-        UpdateBuildings();
-    }
-    
-    /// <summary>
-    /// 更新生产队列
-    /// </summary>
-    void UpdateProductionQueue()
-    {
-        if (productionQueue.Count > 0)
-        {
-            ProductionOrder currentOrder = productionQueue.Peek();
+            allBuildings = new List<BuildingData>();
+            activeBuildings = new List<BuildingData>();
             
-            if (currentOrder.GetProgress() >= 1f)
-            {
-                // 完成当前订单
-                ProductionOrder completedOrder = productionQueue.Dequeue();
-                completedOrder.onComplete?.Invoke();
-                
-                // 触发完成事件
-                OnProductionCompleted?.Invoke(completedOrder);
-            }
+            InitializeBuildingLimits();
         }
-    }
-    
-    /// <summary>
-    /// 更新建筑
-    /// </summary>
-    void UpdateBuildings()
-    {
-        for (int i = 0; i < activeBuildings.Count; i++)
+        
+        /// <summary>
+        /// 初始化建筑限制
+        /// </summary>
+        private void InitializeBuildingLimits()
         {
-            BuildingInstance building = activeBuildings[i];
-            
-            // 更新建造进度
-            if (building.isBeingBuilt)
+            buildingLimits = new Dictionary<BuildingData.BuildingType, int>
             {
-                building.buildProgress += Time.deltaTime / building.data.BuildTime;
-                
-                if (building.buildProgress >= 1f)
+                { BuildingData.BuildingType.Tower, 20 },        // 最多20座防御塔
+                { BuildingData.BuildingType.Research, 5 },      // 最多5个研究所
+                { BuildingData.BuildingType.Production, 10 },   // 最多10个生产工厂
+                { BuildingData.BuildingType.Special, 8 },       // 最多8个特殊建筑
+                { BuildingData.BuildingType.SoulCollector, 15 }, // 最多15个灵魂收集器
+                { BuildingData.BuildingType.Temple, 1 }         // 只能有一个神殿
+            };
+        }
+        
+        /// <summary>
+        /// 建造建筑
+        /// </summary>
+        public bool BuildBuilding(BuildingData building, Vector3 position)
+        {
+            if (building == null)
+            {
+                OnBuildingError?.Invoke("建筑数据无效");
+                return false;
+            }
+            
+            // 检查是否超过建筑总数限制
+            if (allBuildings.Count >= maxBuildings)
+            {
+                OnBuildingError?.Invoke("已达到建筑总数上限");
+                return false;
+            }
+            
+            // 检查是否超过该类型建筑的限制
+            int currentTypeCount = GetBuildingsOfType(building.Type).Count;
+            if (currentTypeCount >= buildingLimits[building.Type])
+            {
+                OnBuildingError?.Invoke($"已达到{building.GetTypeName()}数量上限");
+                return false;
+            }
+            
+            // 检查资源是否足够
+            var cost = building.GetBuildCost();
+            // 这里需要连接到玩家数据来检查资源，暂时跳过检查
+            
+            // 创建建筑实例
+            BuildingData newBuilding = building.Clone();
+            newBuilding.Id = GenerateBuildingId();
+            newBuilding.Position = position;
+            newBuilding.StartConstruction();
+            
+            // 添加到列表
+            allBuildings.Add(newBuilding);
+            
+            // 如果建筑已完成建造（例如某些特殊建筑），则激活
+            if (newBuilding.IsBuilt)
+            {
+                activeBuildings.Add(newBuilding);
+            }
+            
+            OnBuildingConstructed?.Invoke(newBuilding);
+            
+            Debug.Log($"建筑 {newBuilding.Name} 开始建造");
+            return true;
+        }
+        
+        /// <summary>
+        /// 升级建筑
+        /// </summary>
+        public bool UpgradeBuilding(int buildingId)
+        {
+            BuildingData building = GetBuildingById(buildingId);
+            
+            if (building == null)
+            {
+                OnBuildingError?.Invoke("找不到指定的建筑");
+                return false;
+            }
+            
+            if (!building.IsUpgradeable)
+            {
+                OnBuildingError?.Invoke("该建筑无法升级");
+                return false;
+            }
+            
+            if (building.Level >= building.MaxResearchLevel)
+            {
+                OnBuildingError?.Invoke("建筑已达到最高等级");
+                return false;
+            }
+            
+            // 检查资源是否足够
+            var upgradeCost = building.GetUpgradeCost();
+            // 这里需要连接到玩家数据来检查资源，暂时跳过检查
+            
+            // 执行升级
+            building.Upgrade();
+            
+            OnBuildingUpgraded?.Invoke(building);
+            
+            Debug.Log($"建筑 {building.Name} 升级到 {building.Level} 级");
+            return true;
+        }
+        
+        /// <summary>
+        /// 销毁建筑
+        /// </summary>
+        public bool DestroyBuilding(int buildingId)
+        {
+            BuildingData building = GetBuildingById(buildingId);
+            
+            if (building == null)
+            {
+                OnBuildingError?.Invoke("找不到指定的建筑");
+                return false;
+            }
+            
+            // 从所有列表中移除
+            allBuildings.Remove(building);
+            activeBuildings.Remove(building);
+            
+            OnBuildingDestroyed?.Invoke(building);
+            
+            Debug.Log($"建筑 {building.Name} 已被销毁");
+            return true;
+        }
+        
+        /// <summary>
+        /// 激活所有建筑（根据当前阶段）
+        /// </summary>
+        public void ActivateBuildingsForPhase(BattleSystem.BattleState phase)
+        {
+            foreach (var building in allBuildings)
+            {
+                // 检查建筑是否可以在当前阶段激活
+                if (building.CanBuildInCurrentPhase(phase))
                 {
-                    building.isBeingBuilt = false;
-                    building.buildProgress = 1f;
-                    building.currentHealth = building.data.MaxHealth;
-                    
-                    Debug.Log($"建筑建造完成: {building.data.Name}");
+                    building.Activate();
+                    if (!activeBuildings.Contains(building))
+                    {
+                        activeBuildings.Add(building);
+                    }
+                }
+                else
+                {
+                    building.Deactivate();
+                    activeBuildings.Remove(building);
                 }
             }
             
-            // 更新升级进度
-            if (building.isBeingUpgraded)
+            Debug.Log($"为阶段 {phase} 激活了 {activeBuildings.Count} 个建筑");
+        }
+        
+        /// <summary>
+        /// 更新建筑逻辑
+        /// </summary>
+        public void UpdateBuildings(float deltaTime)
+        {
+            // 更新所有建筑的建造进度
+            foreach (var building in allBuildings)
             {
-                // 检查当前订单是否是此建筑
-                if (productionQueue.Count > 0 && productionQueue.Peek().building == building)
+                if (!building.IsBuilt)
                 {
-                    building.upgradeProgress = productionQueue.Peek().GetProgress();
+                    building.UpdateConstruction(deltaTime);
                     
-                    if (building.upgradeProgress >= 1f)
+                    // 如果建筑刚完成建造，将其添加到活跃列表
+                    if (building.IsBuilt && !activeBuildings.Contains(building))
                     {
-                        building.isBeingUpgraded = false;
-                        building.upgradeProgress = 0f;
+                        activeBuildings.Add(building);
                     }
                 }
             }
             
-            // 更新生产功能（如果适用）
-            UpdateBuildingProduction(building);
+            // 根据不同建筑类型执行特定逻辑
+            ExecuteBuildingOperations(deltaTime);
         }
-    }
-    
-    /// <summary>
-    /// 更新建筑生产功能
-    /// </summary>
-    void UpdateBuildingProduction(BuildingInstance building)
-    {
-        if (building.isBeingBuilt || building.currentHealth <= 0) return;
         
-        // 检查生产间隔
-        if (Time.time - building.lastProductionTime >= building.data.ProductionInterval)
+        /// <summary>
+        /// 执行建筑操作
+        /// </summary>
+        private void ExecuteBuildingOperations(float deltaTime)
         {
-            // 执行生产
-            ProduceResources(building);
-            building.lastProductionTime = Time.time;
+            foreach (var building in activeBuildings)
+            {
+                if (!building.IsActive)
+                    continue;
+                
+                switch (building.Type)
+                {
+                    case BuildingData.BuildingType.SoulCollector:
+                        // 灵魂收集器产生灵魂
+                        CollectSouls(building, deltaTime);
+                        break;
+                    case BuildingData.BuildingType.Production:
+                        // 生产工厂生产单位
+                        ProduceUnits(building, deltaTime);
+                        break;
+                    case BuildingData.BuildingType.Research:
+                        // 研究所进行研究
+                        ConductResearch(building, deltaTime);
+                        break;
+                    case BuildingData.BuildingType.Tower:
+                        // 防御塔执行防御逻辑（在战斗系统中处理）
+                        break;
+                    case BuildingData.BuildingType.Special:
+                        // 特殊建筑的特殊逻辑
+                        ExecuteSpecialBuildingLogic(building, deltaTime);
+                        break;
+                    case BuildingData.BuildingType.Temple:
+                        // 神殿的特殊逻辑
+                        ExecuteTempleLogic(building, deltaTime);
+                        break;
+                }
+            }
         }
-    }
-    
-    /// <summary>
-    /// 建筑生产资源
-    /// </summary>
-    void ProduceResources(BuildingInstance building)
-    {
-        switch (building.data.Type)
+        
+        /// <summary>
+        /// 灵魂收集
+        /// </summary>
+        private void CollectSouls(BuildingData building, float deltaTime)
         {
-            case BuildingType.ResourceGenerator:
-                playerData.AddCoins(building.data.ProductionAmount);
-                break;
-                
-            case BuildingType.SoulHarvester:
-                playerData.AddSouls(building.data.ProductionAmount * 0.1f);
-                break;
-                
-            case BuildingType.DefensiveTower:
-                // 防御塔在战斗中发挥作用
-                break;
-                
-            case BuildingType.TrainingCamp:
-                // 训练营提升KuKu能力
-                break;
-                
-            case BuildingType.EvolutionChamber:
-                // 进化室加速进化
-                break;
+            // 灵魂收集器按照速率收集灵魂
+            float soulsCollected = building.SoulCollectionRate * deltaTime;
+            
+            // 这里需要连接到玩家数据来添加灵魂，暂时只记录
+            Debug.Log($"灵魂收集器 {building.Name} 收集了 {soulsCollected:F2} 点灵魂");
         }
         
-        Debug.Log($"{building.data.Name} 产生了资源: +{building.data.ProductionAmount}");
-    }
-    
-    /// <summary>
-    /// 升级完成回调
-    /// </summary>
-    void OnUpgradeComplete(int buildingIndex, BuildingUpgradeType upgradeType)
-    {
-        if (buildingIndex < 0 || buildingIndex >= activeBuildings.Count) return;
-        
-        BuildingInstance building = activeBuildings[buildingIndex];
-        
-        // 应用升级效果
-        ApplyUpgradeEffects(building, upgradeType);
-        
-        // 完成升级
-        building.isBeingUpgraded = false;
-        building.level++;
-        
-        Debug.Log($"建筑升级完成: {building.data.Name}, 等级: {building.level}");
-        
-        // 触发升级完成事件
-        OnBuildingUpgraded?.Invoke(building.data);
-    }
-    
-    /// <summary>
-    /// 应用升级效果
-    /// </summary>
-    void ApplyUpgradeEffects(BuildingInstance building, BuildingUpgradeType upgradeType)
-    {
-        switch (upgradeType)
+        /// <summary>
+        /// 生产单位
+        /// </summary>
+        private void ProduceUnits(BuildingData building, float deltaTime)
         {
-            case BuildingUpgradeType.LevelUpgrade:
-                building.data.MaxHealth *= 1.2f;
-                building.data.ProductionAmount *= 1.3f;
-                building.currentHealth = building.data.MaxHealth;
-                break;
-                
-            case BuildingUpgradeType.AttributeBoost:
-                building.data.MaxHealth *= 1.1f;
-                building.currentHealth = building.data.MaxHealth;
-                break;
-                
-            case BuildingUpgradeType.NewAbility:
-                // 解锁新能力
-                break;
-                
-            case BuildingUpgradeType.Efficiency:
-                building.data.ProductionInterval *= 0.8f; // 提高生产效率
-                break;
-                
-            case BuildingUpgradeType.Capacity:
-                building.data.ProductionAmount *= 1.5f; // 提高产量
-                break;
+            // 生产工厂按照生产速度生产单位
+            float productionProgress = building.ProductionSpeed * deltaTime;
+            
+            // 实际游戏中会根据进度生成单位
+            Debug.Log($"生产工厂 {building.Name} 生产进度: {productionProgress:F2}");
         }
-    }
-    
-    /// <summary>
-    /// 计算升级成本
-    /// </summary>
-    int CalculateUpgradeCost(BuildingInstance building, BuildingUpgradeType upgradeType)
-    {
-        int baseCost = building.data.UpgradeCost;
         
-        // 根据建筑等级增加成本
-        baseCost = Mathf.CeilToInt(baseCost * Mathf.Pow(1.5f, building.level));
-        
-        // 根据升级类型调整
-        switch (upgradeType)
+        /// <summary>
+        /// 进行研究
+        /// </summary>
+        private void ConductResearch(BuildingData building, float deltaTime)
         {
-            case BuildingUpgradeType.LevelUpgrade: return Mathf.CeilToInt(baseCost * 1.2f);
-            case BuildingUpgradeType.AttributeBoost: return Mathf.CeilToInt(baseCost * 0.8f);
-            case BuildingUpgradeType.NewAbility: return Mathf.CeilToInt(baseCost * 2.0f);
-            case BuildingUpgradeType.Efficiency: return Mathf.CeilToInt(baseCost * 1.0f);
-            case BuildingUpgradeType.Capacity: return Mathf.CeilToInt(baseCost * 1.5f);
-            default: return baseCost;
+            // 研究所按照研究速度进行研究
+            float researchProgress = building.ResearchSpeed * deltaTime;
+            
+            // 实际游戏中会根据进度解锁技术
+            Debug.Log($"研究所 {building.Name} 研究进度: {researchProgress:F2}");
         }
-    }
-    
-    /// <summary>
-    /// 计算升级时间
-    /// </summary>
-    float CalculateUpgradeTime(BuildingInstance building, BuildingUpgradeType upgradeType)
-    {
-        float baseTime = building.data.UpgradeTime;
         
-        // 根据建筑等级增加时间
-        baseTime *= Mathf.Pow(1.3f, building.level);
-        
-        // 根据升级类型调整
-        switch (upgradeType)
+        /// <summary>
+        /// 执行特殊建筑逻辑
+        /// </summary>
+        private void ExecuteSpecialBuildingLogic(BuildingData building, float deltaTime)
         {
-            case BuildingUpgradeType.LevelUpgrade: return baseTime * 1.2f;
-            case BuildingUpgradeType.AttributeBoost: return baseTime * 0.8f;
-            case BuildingUpgradeType.NewAbility: return baseTime * 2.0f;
-            case BuildingUpgradeType.Efficiency: return baseTime * 1.0f;
-            case BuildingUpgradeType.Capacity: return baseTime * 1.5f;
-            default: return baseTime;
+            // 特殊建筑的具体逻辑
+            Debug.Log($"特殊建筑 {building.Name} 执行特殊逻辑");
         }
-    }
-    
-    /// <summary>
-    /// 检查是否可以升级建筑
-    /// </summary>
-    bool CanUpgradeBuilding(BuildingInstance building, BuildingUpgradeType upgradeType)
-    {
-        // 检查等级限制
-        if (building.level >= building.data.MaxLevel)
+        
+        /// <summary>
+        /// 执行神殿逻辑
+        /// </summary>
+        private void ExecuteTempleLogic(BuildingData building, float deltaTime)
         {
-            return false;
+            // 神殿的特殊逻辑
+            Debug.Log($"神殿 {building.Name} 执行神殿逻辑");
         }
         
-        // 检查前置条件（根据具体需求）
-        switch (upgradeType)
+        /// <summary>
+        /// 获取指定类型的建筑
+        /// </summary>
+        public List<BuildingData> GetBuildingsOfType(BuildingData.BuildingType type)
         {
-            case BuildingUpgradeType.NewAbility:
-                // 某些能力可能需要特定等级
-                return building.level >= 3;
-                
-            default:
-                return true;
+            return allBuildings.Where(b => b.Type == type).ToList();
         }
-    }
-    
-    /// <summary>
-    /// 创建建筑数据
-    /// </summary>
-    BuildingData CreateBuildingData(BuildingType type)
-    {
-        BuildingData data = new BuildingData();
-        data.Type = type;
-        data.Id = Random.Range(10000, 99999);
         
-        switch (type)
+        /// <summary>
+        /// 获取可生产指定单位的建筑
+        /// </summary>
+        public List<BuildingData> GetProductionBuildingsForUnit(UnitData.UnitType unitType)
         {
-            case BuildingType.ResourceGenerator:
-                data.Name = "金币生成器";
-                data.Description = "定期产生金币的建筑";
-                data.BuildCost = 500;
-                data.UpgradeCost = 300;
-                data.BuildTime = 10f;
-                data.UpgradeTime = 15f;
-                data.MaxHealth = 100f;
-                data.MaxLevel = 10;
-                data.ProductionAmount = 10;
-                data.ProductionInterval = 5f;
-                break;
-                
-            case BuildingType.SoulHarvester:
-                data.Name = "灵魂收割者";
-                data.Description = "收集灵魂能量的建筑";
-                data.BuildCost = 800;
-                data.UpgradeCost = 500;
-                data.BuildTime = 15f;
-                data.UpgradeTime = 20f;
-                data.MaxHealth = 80f;
-                data.MaxLevel = 8;
-                data.ProductionAmount = 5;
-                data.ProductionInterval = 8f;
-                break;
-                
-            case BuildingType.DefensiveTower:
-                data.Name = "防御塔";
-                data.Description = "自动攻击敌人的防御建筑";
-                data.BuildCost = 1000;
-                data.UpgradeCost = 600;
-                data.BuildTime = 20f;
-                data.UpgradeTime = 25f;
-                data.MaxHealth = 200f;
-                data.MaxLevel = 12;
-                data.ProductionAmount = 0; // 不生产资源
-                data.ProductionInterval = 0f;
-                break;
-                
-            case BuildingType.TrainingCamp:
-                data.Name = "训练营";
-                data.Description = "提升KuKu能力的训练场所";
-                data.BuildCost = 1200;
-                data.UpgradeCost = 700;
-                data.BuildTime = 25f;
-                data.UpgradeTime = 30f;
-                data.MaxHealth = 150f;
-                data.MaxLevel = 10;
-                data.ProductionAmount = 0;
-                data.ProductionInterval = 0f;
-                break;
-                
-            case BuildingType.EvolutionChamber:
-                data.Name = "进化室";
-                data.Description = "加速KuKu进化的神秘房间";
-                data.BuildCost = 2000;
-                data.UpgradeCost = 1000;
-                data.BuildTime = 30f;
-                data.UpgradeTime = 35f;
-                data.MaxHealth = 120f;
-                data.MaxLevel = 6;
-                data.ProductionAmount = 0;
-                data.ProductionInterval = 0f;
-                break;
-                
-            default:
-                data.Name = "未知建筑";
-                data.Description = "未知类型的建筑";
-                data.BuildCost = 100;
-                data.UpgradeCost = 50;
-                data.BuildTime = 5f;
-                data.UpgradeTime = 10f;
-                data.MaxHealth = 50f;
-                data.MaxLevel = 5;
-                data.ProductionAmount = 1;
-                data.ProductionInterval = 10f;
-                break;
+            return allBuildings.Where(b => 
+                b.Type == BuildingData.BuildingType.Production && 
+                b.ProducesUnitType == unitType).ToList();
         }
         
-        return data;
-    }
-    
-    /// <summary>
-    /// 获取建筑槽位信息
-    /// </summary>
-    public (int usedSlots, int totalSlots) GetSlotInfo()
-    {
-        return (activeBuildings.Count, maxBuildings);
-    }
-    
-    /// <summary>
-    /// 获取生产队列信息
-    /// </summary>
-    public (int queueSize, float currentProgress, string currentItem) GetProductionInfo()
-    {
-        if (productionQueue.Count == 0)
+        /// <summary>
+        /// 获取建筑通过ID
+        /// </summary>
+        public BuildingData GetBuildingById(int id)
         {
-            return (0, 0f, "无生产任务");
+            return allBuildings.FirstOrDefault(b => b.Id == id);
         }
         
-        var currentOrder = productionQueue.Peek();
-        string itemName = currentOrder.upgradeType.ToString();
+        /// <summary>
+        /// 获取所有建筑
+        /// </summary>
+        public List<BuildingData> GetAllBuildings()
+        {
+            return new List<BuildingData>(allBuildings);
+        }
         
-        return (productionQueue.Count, currentOrder.GetProgress(), itemName);
-    }
-    
-    /// <summary>
-    /// 取消当前生产任务
-    /// </summary>
-    public bool CancelCurrentProduction()
-    {
-        if (productionQueue.Count == 0) return false;
+        /// <summary>
+        /// 获取活跃建筑
+        /// </summary>
+        public List<BuildingData> GetActiveBuildings()
+        {
+            return new List<BuildingData>(activeBuildings);
+        }
         
-        var cancelledOrder = productionQueue.Dequeue();
-        cancelledOrder.building.isBeingUpgraded = false;
+        /// <summary>
+        /// 生成建筑ID
+        /// </summary>
+        private int GenerateBuildingId()
+        {
+            // 简单的ID生成方法，实际中可能需要更复杂的逻辑
+            int newId = 1;
+            while (allBuildings.Exists(b => b.Id == newId))
+            {
+                newId++;
+            }
+            return newId;
+        }
         
-        Debug.Log($"取消了生产任务: {cancelledOrder.upgradeType}");
+        /// <summary>
+        /// 检查位置是否可以建造
+        /// </summary>
+        public bool CanBuildAtPosition(Vector3 position, float minDistance = 2f)
+        {
+            // 检查与其他建筑的距离
+            foreach (var building in allBuildings)
+            {
+                float distance = Vector3.Distance(building.Position, position);
+                if (distance < minDistance)
+                {
+                    return false;
+                }
+            }
+            
+            // 可以添加更多检查，如地形、障碍物等
+            return true;
+        }
         
-        return true;
-    }
-    
-    /// <summary>
-    /// 快速建造（仅用于调试）
-    /// </summary>
-    public void FastBuild(int buildingIndex)
-    {
-        if (buildingIndex < 0 || buildingIndex >= activeBuildings.Count) return;
+        /// <summary>
+        /// 获取指定位置附近的建筑
+        /// </summary>
+        public List<BuildingData> GetBuildingsNearPosition(Vector3 position, float radius)
+        {
+            List<BuildingData> nearbyBuildings = new List<BuildingData>();
+            
+            foreach (var building in allBuildings)
+            {
+                float distance = Vector3.Distance(building.Position, position);
+                if (distance <= radius)
+                {
+                    nearbyBuildings.Add(building);
+                }
+            }
+            
+            return nearbyBuildings;
+        }
         
-        var building = activeBuildings[buildingIndex];
-        building.isBeingBuilt = false;
-        building.buildProgress = 1f;
-        building.currentHealth = building.data.MaxHealth;
+        /// <summary>
+        /// 获取建筑统计信息
+        /// </summary>
+        public Dictionary<BuildingData.BuildingType, int> GetBuildingStatistics()
+        {
+            var stats = new Dictionary<BuildingData.BuildingType, int>();
+            
+            foreach (BuildingData.BuildingType type in Enum.GetValues(typeof(BuildingData.BuildingType)))
+            {
+                stats[type] = GetBuildingsOfType(type).Count;
+            }
+            
+            return stats;
+        }
         
-        Debug.Log($"快速建造完成: {building.data.Name}");
-    }
-    
-    void OnDestroy()
-    {
-        Debug.Log("建筑管理系统已销毁");
+        /// <summary>
+        /// 获取所有建筑的总价值
+        /// </summary>
+        public int GetTotalBuildingValue()
+        {
+            int totalValue = 0;
+            
+            foreach (var building in allBuildings)
+            {
+                totalValue += building.RequiredCoins; // 简单地使用建造费用作为价值
+            }
+            
+            return totalValue;
+        }
+        
+        /// <summary>
+        /// 修复建筑
+        /// </summary>
+        public bool RepairBuilding(int buildingId, float repairAmount)
+        {
+            BuildingData building = GetBuildingById(buildingId);
+            
+            if (building == null)
+            {
+                OnBuildingError?.Invoke("找不到指定的建筑");
+                return false;
+            }
+            
+            building.Repair(repairAmount);
+            
+            OnBuildingHealthChanged?.Invoke(building, building.CurrentHealth);
+            
+            Debug.Log($"建筑 {building.Name} 修复了 {repairAmount:F2} 点生命值");
+            return true;
+        }
+        
+        /// <summary>
+        /// 对建筑造成伤害
+        /// </summary>
+        public bool DamageBuilding(int buildingId, float damage)
+        {
+            BuildingData building = GetBuildingById(buildingId);
+            
+            if (building == null)
+            {
+                OnBuildingError?.Invoke("找不到指定的建筑");
+                return false;
+            }
+            
+            building.TakeDamage(damage);
+            
+            OnBuildingHealthChanged?.Invoke(building, building.CurrentHealth);
+            
+            if (building.CurrentHealth <= 0)
+            {
+                // 建筑被摧毁
+                DestroyBuilding(buildingId);
+            }
+            
+            Debug.Log($"建筑 {building.Name} 受到 {damage:F2} 点伤害，剩余生命值: {building.CurrentHealth:F2}");
+            return true;
+        }
+        
+        /// <summary>
+        /// 获取建筑建造队列
+        /// </summary>
+        public List<BuildingData> GetConstructionQueue()
+        {
+            return allBuildings.Where(b => !b.IsBuilt).ToList();
+        }
+        
+        /// <summary>
+        /// 重置建筑管理器
+        /// </summary>
+        public void Reset()
+        {
+            allBuildings.Clear();
+            activeBuildings.Clear();
+            
+            Debug.Log("建筑管理器已重置");
+        }
+        
+        /// <summary>
+        /// 获取当前建筑数量
+        /// </summary>
+        public int GetBuildingCount()
+        {
+            return allBuildings.Count;
+        }
+        
+        /// <summary>
+        /// 获取指定类型建筑的当前数量
+        /// </summary>
+        public int GetBuildingCount(BuildingData.BuildingType type)
+        {
+            return GetBuildingsOfType(type).Count;
+        }
+        
+        /// <summary>
+        /// 检查是否可以建造指定类型的建筑
+        /// </summary>
+        public bool CanBuildType(BuildingData.BuildingType type)
+        {
+            return GetBuildingCount(type) < buildingLimits[type];
+        }
+        
+        /// <summary>
+        /// 获取建造某类型建筑还需要多少数量
+        /// </summary>
+        public int GetRemainingBuildableCount(BuildingData.BuildingType type)
+        {
+            return buildingLimits[type] - GetBuildingCount(type);
+        }
+        
+        /// <summary>
+        /// 获取所有建筑的建造进度
+        /// </summary>
+        public float GetOverallConstructionProgress()
+        {
+            if (allBuildings.Count == 0) return 100f;
+            
+            float totalProgress = 0f;
+            foreach (var building in allBuildings)
+            {
+                totalProgress += building.GetConstructionPercentage();
+            }
+            
+            return totalProgress / allBuildings.Count;
+        }
     }
 }
