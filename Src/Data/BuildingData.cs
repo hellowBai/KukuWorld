@@ -13,220 +13,196 @@ namespace KukuWorld.Data
         public int Id { get; set; }
         public string Name { get; set; }
         public string Description { get; set; }
-        
+
         // 建筑类型
         public BuildingType Type { get; set; }
-        public enum BuildingType { 
-            Tower,          // 防御塔
-            Research,       // 研究所
-            Production,     // 生产工厂
-            Special,        // 特殊建筑
-            SoulCollector,  // 灵魂收集器
-            Market,         // 市场
-            Training,       // 训练场
-            FusionCenter    // 融合中心
+        public enum BuildingType 
+        { 
+            Tower,           // 防御塔
+            Research,        // 研究所
+            Production,      // 生产工厂
+            Special,         // 特殊建筑
+            SoulCollector,   // 灵魂收集器（捕捉阶段特有）
+            Temple           // 神殿（防守阶段核心）
         }
-        
-        // 等级和需求
-        public int Level { get; set; }
-        public int RequiredResearchLevel { get; set; }
-        public int RequiredCoins { get; set; }
-        public int RequiredGems { get; set; }
-        
-        // 属性（根据类型不同）
-        public float AttackPower { get; set; }      // 攻击力（塔类）
-        public float Range { get; set; }            // 射程（塔类）
-        public float Health { get; set; }           // 生命值
-        public float BuildTime { get; set; }        // 建造时间
-        
-        // 研究属性
-        public float ResearchSpeed { get; set; }    // 研究速度（研究类）
-        public int MaxResearchLevel { get; set; }   // 最大研究等级
-        
-        // 生产属性
-        public float ProductionSpeed { get; set; }  // 生产速度（生产类）
-        public string ProducedItem { get; set; }    // 生产物品
-        public UnitData.UnitType ProducesUnitType { get; set; } // 生产单位类型
-        
-        // 特殊属性
-        public bool IsUpgradeable { get; set; }
-        public int UpgradeCostMultiplier { get; set; }
-        
-        // 捕捉阶段特有属性
-        public float SoulCollectionRate { get; set; }        // 灵魂收集速率
-        public bool IsActiveDuringCapturePhase { get; set; }  // 捕捉阶段是否激活
-        
-        // 状态
-        public bool IsActive { get; set; }
-        public float CurrentHealth { get; set; }
-        public int MaxLevel { get; set; }
-        
-        // 视觉相关
-        public string SpriteName { get; set; }
-        public Color Tint { get; set; }
-        
-        // 其他属性
-        public float EnergyConsumption { get; set; }    // 能量消耗
-        public float EnergyGeneration { get; set; }     // 能量生成
-        public float MaintenanceCost { get; set; }      // 维护费用
-        public float UpgradeTime { get; set; }          // 升级时间
-        public int StorageCapacity { get; set; }        // 存储容量
-        public int WorkerCapacity { get; set; }         // 工作人员容量
-        public float Efficiency { get; set; }           // 效率
-        public float DefenseBonus { get; set; }         // 防御加成
-        public float ProductionBonus { get; set; }      // 生产加成
-        public float ResearchBonus { get; set; }        // 研究加成
-        public bool RequiresPower { get; set; }         // 是否需要电力
-        public float PowerRequirement { get; set; }     // 电力需求
-        public bool IsPowered { get; set; }             // 是否有电力供应
-        public float ConstructionProgress { get; set; } // 建造进度
-        public bool IsUnderConstruction { get; set; }   // 是否在建造中
 
+        // 等级和需求
+        public int Level { get; set; } = 1;
+        public int RequiredResearchLevel { get; set; } = 0;
+        public int RequiredCoins { get; set; } = 100;
+        public int RequiredGems { get; set; } = 0;
+
+        // 属性（根据类型不同）
+        public float AttackPower { get; set; } = 0f;  // 攻击力（塔类）
+        public float Range { get; set; } = 0f;        // 射程（塔类）
+        public float Health { get; set; } = 100f;     // 生命值
+        public float BuildTime { get; set; } = 10f;   // 建造时间
+
+        // 研究属性
+        public float ResearchSpeed { get; set; } = 0f;        // 研究速度（研究类）
+        public int MaxResearchLevel { get; set; } = 10;       // 最大研究等级
+
+        // 生产属性
+        public float ProductionSpeed { get; set; } = 0f;      // 生产速度（生产类）
+        public string ProducedItem { get; set; } = "";        // 生产物品
+        public UnitData.UnitType ProducesUnitType { get; set; } = UnitData.UnitType.Robot; // 生产单位类型
+
+        // 特殊属性
+        public bool IsUpgradeable { get; set; } = true;       // 是否可升级
+        public int UpgradeCostMultiplier { get; set; } = 2;   // 升级花费倍数
+
+        // 捕捉阶段特有属性
+        public float SoulCollectionRate { get; set; } = 0f;   // 灵魂收集速率（灵魂收集器）
+        public bool IsActiveDuringCapturePhase { get; set; } = true; // 捕捉阶段是否激活
+        public bool IsActiveDuringDefensePhase { get; set; } = true; // 防守阶段是否激活
+
+        // 视觉相关
+        public string SpriteName { get; set; } = "";
+        public Color Tint { get; set; } = Color.white;
+
+        // 状态
+        public bool IsBuilt { get; set; } = false;           // 是否已建造
+        public bool IsActive { get; set; } = false;          // 是否激活
+        public float CurrentHealth { get; set; } = 0f;       // 当前生命值
+        public float ConstructionProgress { get; set; } = 0f; // 建造进度
+
+        // 位置信息
+        public Vector3 Position { get; set; } = Vector3.zero;
+
+        // 构造函数
         public BuildingData()
         {
-            // 初始化默认值
-            Name = "未知建筑";
-            Description = "一个未定义的建筑";
+            Name = "未命名建筑";
+            Description = "一个基础建筑";
             Type = BuildingType.Tower;
             Level = 1;
-            RequiredResearchLevel = 0;
             RequiredCoins = 100;
             RequiredGems = 0;
-            AttackPower = 0f;
-            Range = 0f;
-            Health = 100f;
-            BuildTime = 10f;
-            ResearchSpeed = 0f;
-            MaxResearchLevel = 10;
-            ProductionSpeed = 0f;
-            ProducedItem = "";
-            ProducesUnitType = UnitData.UnitType.Robot;
-            IsUpgradeable = true;
-            UpgradeCostMultiplier = 2;
-            SoulCollectionRate = 0f;
-            IsActiveDuringCapturePhase = false;
-            IsActive = false;
+            Health = 200f;
             CurrentHealth = Health;
-            MaxLevel = 10;
-            SpriteName = "DefaultBuildingSprite";
-            Tint = Color.white;
-            EnergyConsumption = 0f;
-            EnergyGeneration = 0f;
-            MaintenanceCost = 0f;
-            UpgradeTime = 5f;
-            StorageCapacity = 0;
-            WorkerCapacity = 0;
-            Efficiency = 1.0f;
-            DefenseBonus = 0f;
-            ProductionBonus = 0f;
-            ResearchBonus = 0f;
-            RequiresPower = true;
-            PowerRequirement = 10f;
-            IsPowered = true;
+            BuildTime = 10f;
+            IsBuilt = false;
+            IsActive = false;
             ConstructionProgress = 0f;
-            IsUnderConstruction = false;
         }
-        
+
         /// <summary>
         /// 升级建筑
         /// </summary>
         public void Upgrade()
         {
-            if (Level < MaxLevel)
+            if (!IsUpgradeable || Level >= MaxResearchLevel)
+                return;
+
+            Level++;
+
+            // 根据建筑类型提升相应属性
+            switch (Type)
             {
-                Level++;
-                
-                // 根据建筑类型提升属性
-                switch (Type)
-                {
-                    case BuildingType.Tower:
-                        AttackPower *= 1.3f;
-                        Range *= 1.1f;
-                        Health *= 1.2f;
-                        break;
-                    case BuildingType.Research:
-                        ResearchSpeed *= 1.25f;
-                        break;
-                    case BuildingType.Production:
-                        ProductionSpeed *= 1.2f;
-                        break;
-                    case BuildingType.SoulCollector:
-                        SoulCollectionRate *= 1.3f;
-                        break;
-                    case BuildingType.Market:
-                        StorageCapacity = (int)(StorageCapacity * 1.5f);
-                        break;
-                    case BuildingType.Training:
-                        Efficiency *= 1.15f;
-                        break;
-                    case BuildingType.FusionCenter:
-                        // 融合中心提升融合成功率
-                        break;
-                    case BuildingType.Special:
-                        // 特殊建筑特殊处理
-                        break;
-                }
-                
-                // 恢复满血
-                CurrentHealth = Health;
+                case BuildingType.Tower:
+                    AttackPower *= 1.3f; // 攻击力提升30%
+                    Range *= 1.1f;       // 射程提升10%
+                    Health *= 1.2f;      // 生命值提升20%
+                    CurrentHealth = Health; // 恢复满血
+                    break;
+                case BuildingType.Research:
+                    ResearchSpeed *= 1.25f; // 研究速度提升25%
+                    MaxResearchLevel += 2;  // 最大研究等级提升
+                    break;
+                case BuildingType.Production:
+                    ProductionSpeed *= 1.2f; // 生产速度提升20%
+                    break;
+                case BuildingType.SoulCollector:
+                    SoulCollectionRate *= 1.4f; // 灵魂收集率提升40%
+                    break;
+                case BuildingType.Special:
+                    // 特殊建筑根据具体情况提升属性
+                    AttackPower *= 1.15f;
+                    Health *= 1.15f;
+                    CurrentHealth = Health;
+                    break;
+                case BuildingType.Temple:
+                    // 神殿提升大量生命值
+                    Health *= 1.5f;
+                    CurrentHealth = Health;
+                    break;
             }
+
+            // 更新升级成本
+            RequiredCoins = (int)(RequiredCoins * UpgradeCostMultiplier);
+            RequiredGems = (int)(RequiredGems * UpgradeCostMultiplier);
         }
-        
+
         /// <summary>
         /// 获取建造花费
         /// </summary>
         public (int coins, int gems) GetBuildCost()
         {
-            int coins = (int)(RequiredCoins * Math.Pow(UpgradeCostMultiplier, Level - 1));
-            int gems = (int)(RequiredGems * Math.Pow(UpgradeCostMultiplier, Level - 1) / 2);
-            return (coins, gems);
+            return (RequiredCoins, RequiredGems);
         }
-        
+
         /// <summary>
         /// 获取升级花费
         /// </summary>
         public (int coins, int gems) GetUpgradeCost()
         {
-            int coins = (int)(RequiredCoins * UpgradeCostMultiplier);
-            int gems = (int)(RequiredGems * UpgradeCostMultiplier / 2);
-            return (coins, gems);
+            int upgradeCoins = (int)(RequiredCoins * UpgradeCostMultiplier);
+            int upgradeGems = (int)(RequiredGems * UpgradeCostMultiplier);
+            
+            // 花费随等级增加
+            upgradeCoins = (int)(upgradeCoins * Math.Pow(1.5, Level - 1));
+            upgradeGems = (int)(upgradeGems * Math.Pow(1.5, Level - 1));
+
+            return (upgradeCoins, upgradeGems);
         }
-        
+
         /// <summary>
         /// 检查是否可以建造（基于当前游戏阶段）
         /// </summary>
-        public bool CanBuildInCurrentPhase(GameManager.GameState currentPhase)
+        public bool CanBuildInCurrentPhase(Systems.BattleSystem.BattleState currentPhase)
         {
-            switch (Type)
+            // 在捕捉阶段，只能建造捕捉相关的建筑
+            if (currentPhase == Systems.BattleSystem.BattleState.CapturePhase)
             {
-                case BuildingType.SoulCollector:
-                    // 灵魂收集器只能在捕捉阶段建造
-                    return currentPhase == GameManager.GameState.CapturePhase;
-                case BuildingType.Tower:
-                case BuildingType.Research:
-                case BuildingType.Production:
-                case BuildingType.Special:
-                case BuildingType.Market:
-                case BuildingType.Training:
-                case BuildingType.FusionCenter:
-                    // 其他建筑可以在防守阶段建造
-                    return currentPhase == GameManager.GameState.DefensePhase;
-                default:
-                    return true;
+                return Type == BuildingType.SoulCollector || Type == BuildingType.Special;
             }
+
+            // 在防守阶段，可以建造防守相关建筑
+            if (currentPhase == Systems.BattleSystem.BattleState.DefensePhaseSetup ||
+                currentPhase == Systems.BattleSystem.BattleState.WaveStart ||
+                currentPhase == Systems.BattleSystem.BattleState.Fighting)
+            {
+                return Type == BuildingType.Tower || 
+                       Type == BuildingType.Research || 
+                       Type == BuildingType.Production || 
+                       Type == BuildingType.Special ||
+                       Type == BuildingType.Temple;
+            }
+
+            return true;
         }
-        
+
+        /// <summary>
+        /// 检查是否可以收集灵魂（仅在捕捉阶段激活的建筑）
+        /// </summary>
+        public bool CanCollectSoulsInCurrentPhase(Systems.BattleSystem.BattleState currentPhase)
+        {
+            return Type == BuildingType.SoulCollector && 
+                   currentPhase == Systems.BattleSystem.BattleState.CapturePhase &&
+                   IsActiveDuringCapturePhase;
+        }
+
         /// <summary>
         /// 激活建筑（开始工作）
         /// </summary>
         public void Activate()
         {
-            if (CurrentHealth > 0 && IsPowered)
-            {
-                IsActive = true;
-            }
+            if (!IsBuilt)
+                return;
+
+            IsActive = true;
         }
-        
+
         /// <summary>
         /// 停止建筑
         /// </summary>
@@ -234,73 +210,120 @@ namespace KukuWorld.Data
         {
             IsActive = false;
         }
-        
+
         /// <summary>
         /// 受到伤害
         /// </summary>
         public void TakeDamage(float damage)
         {
+            if (!IsBuilt)
+                return;
+
             CurrentHealth -= damage;
-            if (CurrentHealth < 0)
+            if (CurrentHealth <= 0)
             {
                 CurrentHealth = 0;
+                // 建筑被摧毁，可以在这里添加额外的逻辑
+                Debug.Log($"{Name} 被摧毁了！");
             }
         }
-        
+
         /// <summary>
-        /// 修理建筑
+        /// 修复建筑
         /// </summary>
-        public void Repair()
+        public void Repair(float repairAmount)
         {
-            CurrentHealth = Health;
+            if (!IsBuilt)
+                return;
+
+            CurrentHealth = Mathf.Min(Health, CurrentHealth + repairAmount);
         }
-        
+
         /// <summary>
-        /// 获取类型名称
+        /// 开始建造
+        /// </summary>
+        public void StartConstruction()
+        {
+            IsBuilt = false;
+            ConstructionProgress = 0f;
+            CurrentHealth = 0f; // 建造过程中没有生命值
+        }
+
+        /// <summary>
+        /// 更新建造进度
+        /// </summary>
+        public void UpdateConstruction(float deltaTime)
+        {
+            if (IsBuilt || ConstructionProgress >= 1f)
+                return;
+
+            // 根据建造时间和经过的时间更新进度
+            float progressPerSecond = 1.0f / BuildTime;
+            ConstructionProgress = Mathf.Min(1.0f, ConstructionProgress + progressPerSecond * deltaTime);
+
+            if (ConstructionProgress >= 1.0f)
+            {
+                FinishConstruction();
+            }
+        }
+
+        /// <summary>
+        /// 完成建造
+        /// </summary>
+        private void FinishConstruction()
+        {
+            IsBuilt = true;
+            CurrentHealth = Health; // 建造完成后恢复满血
+            ConstructionProgress = 1.0f;
+            Debug.Log($"{Name} 建造完成！");
+        }
+
+        /// <summary>
+        /// 获取建造进度百分比
+        /// </summary>
+        public float GetConstructionPercentage()
+        {
+            return ConstructionProgress * 100f;
+        }
+
+        /// <summary>
+        /// 获取建筑类型名称
         /// </summary>
         public string GetTypeName()
         {
             switch (Type)
             {
-                case BuildingType.Tower:
-                    return "防御塔";
-                case BuildingType.Research:
-                    return "研究所";
-                case BuildingType.Production:
-                    return "生产工厂";
-                case BuildingType.Special:
-                    return "特殊建筑";
-                case BuildingType.SoulCollector:
-                    return "灵魂收集器";
-                case BuildingType.Market:
-                    return "市场";
-                case BuildingType.Training:
-                    return "训练场";
-                case BuildingType.FusionCenter:
-                    return "融合中心";
-                default:
-                    return "未知";
+                case BuildingType.Tower: return "防御塔";
+                case BuildingType.Research: return "研究所";
+                case BuildingType.Production: return "生产工厂";
+                case BuildingType.Special: return "特殊建筑";
+                case BuildingType.SoulCollector: return "灵魂收集器";
+                case BuildingType.Temple: return "神殿";
+                default: return "未知建筑";
             }
         }
-        
+
         /// <summary>
-        /// 检查建筑是否被摧毁
+        /// 获取当前状态描述
         /// </summary>
-        public bool IsDestroyed()
+        public string GetStatus()
         {
-            return CurrentHealth <= 0;
+            if (!IsBuilt)
+            {
+                return $"建造中: {GetConstructionPercentage():F1}%";
+            }
+            else if (IsActive)
+            {
+                return "运行中";
+            }
+            else
+            {
+                return "待机";
+            }
         }
-        
+
         /// <summary>
-        /// 重写ToString方法
-        /// </summary>
-        public override string ToString()
-        {
-            return $"{Name} [{GetTypeName()}] - Lv.{Level} HP:{CurrentHealth:F0}/{Health:F0}";
-        }
-        
-        /// <summary>
-        /// 复制当前建筑数据
+        /// 复制建筑数据
         /// </summary>
         public BuildingData Clone()
         {
@@ -327,27 +350,23 @@ namespace KukuWorld.Data
                 UpgradeCostMultiplier = this.UpgradeCostMultiplier,
                 SoulCollectionRate = this.SoulCollectionRate,
                 IsActiveDuringCapturePhase = this.IsActiveDuringCapturePhase,
-                IsActive = this.IsActive,
-                CurrentHealth = this.CurrentHealth,
-                MaxLevel = this.MaxLevel,
+                IsActiveDuringDefensePhase = this.IsActiveDuringDefensePhase,
                 SpriteName = this.SpriteName,
                 Tint = this.Tint,
-                EnergyConsumption = this.EnergyConsumption,
-                EnergyGeneration = this.EnergyGeneration,
-                MaintenanceCost = this.MaintenanceCost,
-                UpgradeTime = this.UpgradeTime,
-                StorageCapacity = this.StorageCapacity,
-                WorkerCapacity = this.WorkerCapacity,
-                Efficiency = this.Efficiency,
-                DefenseBonus = this.DefenseBonus,
-                ProductionBonus = this.ProductionBonus,
-                ResearchBonus = this.ResearchBonus,
-                RequiresPower = this.RequiresPower,
-                PowerRequirement = this.PowerRequirement,
-                IsPowered = this.IsPowered,
+                IsBuilt = this.IsBuilt,
+                IsActive = this.IsActive,
+                CurrentHealth = this.CurrentHealth,
                 ConstructionProgress = this.ConstructionProgress,
-                IsUnderConstruction = this.IsUnderConstruction
+                Position = this.Position
             };
+        }
+
+        /// <summary>
+        /// 重写ToString方法
+        /// </summary>
+        public override string ToString()
+        {
+            return $"{Name} [{GetTypeName()}] - Lv.{Level} {GetStatus()}";
         }
     }
 }
