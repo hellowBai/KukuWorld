@@ -1,0 +1,4 @@
+repository "KukuWorld@tj_wechat_os_qy08p7sw_crpc86qzbuy_e86k@cloud.cn"
+  path "/"
+    br "/main"
+    co "/main"
