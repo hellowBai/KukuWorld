@@ -11,11 +11,7 @@ public class GameManager : MonoBehaviour
     public int initialPlayerLives = 10;
     
     [Header("系统引用")]
-    public CaptureSystem captureSystem;
     public BattleSystem battleSystem;
-    public EvolutionSystem evolutionSystem;
-    public FusionSystem fusionSystem;
-    public EquipmentSystem equipmentSystem;
     public BuildingManager buildingManager;
     public KukuCollectionSystem collectionSystem;
     
@@ -72,25 +68,19 @@ public class GameManager : MonoBehaviour
     
     void InitializeSystems()
     {
-        // 创建系统对象
+        // 创建系统对象（仅对非静态类）
         GameObject systemsObj = new GameObject("GameSystems");
         
-        captureSystem = systemsObj.AddComponent<CaptureSystem>();
         battleSystem = systemsObj.AddComponent<BattleSystem>();
-        evolutionSystem = systemsObj.AddComponent<EvolutionSystem>();
-        fusionSystem = systemsObj.AddComponent<FusionSystem>();
-        equipmentSystem = systemsObj.AddComponent<EquipmentSystem>();
         buildingManager = systemsObj.AddComponent<BuildingManager>();
         collectionSystem = systemsObj.AddComponent<KukuCollectionSystem>();
         
         // 初始化系统
-        captureSystem.Initialize();
         battleSystem.Initialize();
-        evolutionSystem.Initialize();
-        fusionSystem.Initialize();
-        equipmentSystem.Initialize();
         buildingManager.Initialize();
         collectionSystem.Initialize();
+        
+        // 静态系统不需要初始化，它们在第一次调用时自动初始化
     }
     
     void Update()
@@ -105,6 +95,9 @@ public class GameManager : MonoBehaviour
     {
         CapturePhaseTimeRemaining -= Time.deltaTime;
         
+        // 更新捕捉系统中的野生KuKu
+        CaptureSystem.UpdateWildKukus(Time.deltaTime);
+        
         if (CapturePhaseTimeRemaining <= 0)
         {
             EndCapturePhase();
@@ -117,7 +110,8 @@ public class GameManager : MonoBehaviour
         CapturePhaseTimeRemaining = capturePhaseDuration;
         
         // 初始化捕捉阶段
-        captureSystem.StartCapturePhase();
+        // 静态CaptureSystem不需要实例方法调用
+        // 捕捉逻辑将在Update中处理
     }
     
     public void StartDefensePhase()
@@ -140,7 +134,8 @@ public class GameManager : MonoBehaviour
     void EndCapturePhase()
     {
         // 保存捕捉阶段的结果
-        captureSystem.EndCapturePhase();
+        // 静态CaptureSystem不需要实例方法调用
+        // 捕捉结果由静态方法管理
         
         // 进入防守阶段
         StartDefensePhase();

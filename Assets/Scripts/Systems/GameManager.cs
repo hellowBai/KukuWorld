@@ -33,11 +33,7 @@ namespace KukuWorld.Systems
         
         // 系统引用
         public BattleSystem BattleSystem { get; private set; }
-        public CaptureSystem CaptureSystem { get; private set; }
         public KukuCollectionSystem CollectionSystem { get; private set; }
-        public EvolutionSystem EvolutionSystem { get; private set; }
-        public FusionSystem FusionSystem { get; private set; }
-        public EquipmentSystem EquipmentSystem { get; private set; }
         public BuildingManager BuildingManager { get; private set; }
 
         // 时间管理
@@ -76,7 +72,6 @@ namespace KukuWorld.Systems
             
             // 初始化各系统
             BattleSystem = new BattleSystem();
-            CaptureSystem = new CaptureSystem();
             CollectionSystem = new KukuCollectionSystem();
             BuildingManager = new BuildingManager();
             
@@ -130,7 +125,7 @@ namespace KukuWorld.Systems
             
             // 重置各系统
             BattleSystem?.Reset();
-            CaptureSystem?.ClearAllWildKukus();
+            CaptureSystem.ClearAllWildKukus();
             BuildingManager?.Reset();
             
             // 切换到捕捉阶段
@@ -154,7 +149,7 @@ namespace KukuWorld.Systems
             }
 
             // 更新各系统
-            CaptureSystem?.UpdateWildKukus(deltaTime);
+            CaptureSystem.UpdateWildKukus(deltaTime);
             BattleSystem?.UpdateBattleLogic(deltaTime);
         }
 
